@@ -58,10 +58,8 @@ Natives.hook( 'EventTarget.prototype.addEventListener', 'EventTarget.prototype.r
     //  This 12 is the additional argument to pass to generator.
 }, 12 );
 
-//  After hooking those methods, 
-//  you can try to bind some event to some element, 
-//  the error that printed inside of hooked 
-//  function will be printed for every addEventListener or removeEventListener call, let's try.
+//  After hooking those methods you can try to bind some event to some element, 
+//  message that prints hooked function will be printed for every addEventListener or removeEventListener call, let's try.
 document.querySelector( '#target' ).addEventListener( 'click', function () {
     console.log( 'Clicked on target!' );
 } );
