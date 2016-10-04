@@ -11,7 +11,7 @@ There are couple of problems according to Hooking, which are`
 Here is a complete hooking API for JavaScript which solves all the problems mentioned above.
 
 This API uses error prone hooking techniques after which hook functions cannot be spotted.  
-It has local container for hooked functions which is well organized.  
+It has local container for original functions which is well organized.  
 Also this API solves vendor prefixing problems.
 
 #### To use with NodeJS run.
