@@ -363,8 +363,8 @@ In webkit there are 3 available functions for cancelling requested animation fra
 1. **cancelAnimationFrame**  
 2. **webkitCancelAnimationFrame**  
 3. **webkitCancelRequestAnimationFrame**  
-As we can see third version is a vendor prefixed version of cancelAnimationFrame.
-It's a prefixed version of cancelRequestAnimationFrame, which is the same function.
+As we can see third version is not a vendor prefixed version of cancelAnimationFrame.
+It's a prefixed version of cancelRequestAnimationFrame, which does the same thing as cancelAnimationFrame, so this is considered as an additional version of those functions.  
 You can pass this additional variants too.
 
 Try to delete cancelAnimationFrame default function, to see what happenes in case of default version is not available.  
