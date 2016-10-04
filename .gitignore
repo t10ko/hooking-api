@@ -1,0 +1,5 @@
+*.log
+*.html
+.npmignore
+src/for-node*
+node_modules
