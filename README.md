@@ -228,8 +228,6 @@ window.setTimeout( function () {
 
 ## Helper methods.
 
-## Original functions container.
-
 ### Natives.load( ...path, [options] );
 
 Loads functions original versions into container.  
