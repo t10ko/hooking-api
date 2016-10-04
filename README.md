@@ -3,7 +3,7 @@
 [Hooking or function overriding](https://en.wikipedia.org/wiki/Hooking) is a well known technique in programming.  
 It's usefull for debugging your code, extending plugins and doing things that seem impossible( for example overriding events mechanisms in JS, to gain full control over events ).
 
-There are couple of problems according to Hooking, which are`
+There are couple of problems according to Hooking, which are`  
 1. Saving original functions in some container(if you'r the hooker, you need to use original functions).  
 2. Hooked functions can easily be spotted.  
 3. It's easy to break things around because hooked methods are different than originals.
