@@ -359,10 +359,10 @@ Try this with webkit.
 Natives.translate( 'requestAnimationFrame', { bindToParent: true } );
 ```
 
-In webkit there are 3 available functions for cancelling requested animation frame.
-1. **cancelAnimationFrame**
-2. **webkitCancelAnimationFrame**
-3. **webkitCancelRequestAnimationFrame**
+In webkit there are 3 available functions for cancelling requested animation frame.  
+1. **cancelAnimationFrame**  
+2. **webkitCancelAnimationFrame**  
+3. **webkitCancelRequestAnimationFrame**  
 As we can see third version is a vendor prefixed version of cancelAnimationFrame.
 It's a prefixed version of cancelRequestAnimationFrame, which is the same function.
 You can pass this additional variants too.
@@ -390,6 +390,8 @@ This will try the following versions
 Natives.translate( 'KEYFRAMES_RULE', { from: 'CSSRule', prefixType: 'const' } );
 ```
 
+Translating constants are not usefull for hooking, it's an additional feature that makes vendor prefixed versions easier to organize.
+
 If there is vendor prefix versions available for the same function, first translate it to parse all known translations, than hook it.  
 It will override all variants of available functions.
 ```javascript
@@ -413,9 +415,7 @@ After this call, you will see following three lines in your console(if you'r usi
     'Hooking webkitCancelRequestAnimationFrame'  
 
 This means that all versions of **cancelAnimationFrame** will be hooked.  
-But you **must** call hook after the translate to get this result.
-
-Constant translations are not usefull for hooking, it's an additional feature that makes vendor prefixed version easy to use.
+But you **must** call hook after the translate to be able to do this.
 
 And that's all.
 Please submit bug report if you find something.
