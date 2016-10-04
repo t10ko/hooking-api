@@ -152,7 +152,7 @@ Backtraces will have more entries because of hooks.
 This is the alias of hook with one difference.
 
 When you call hook on a function that already has been hooked you will hook the hooked version *(ahahaha)*, not the original one.  
-This is because in other case you'll lose all the changes done before.
+I made like this, because in other case you'll lose all the changes done before.
 
 **reHook** is for hooking that function from 0.  
 You will replace all changes done before.
