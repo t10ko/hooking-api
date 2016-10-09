@@ -244,7 +244,7 @@
 			while( i-- ) 
 				args.push( 'a' + i );
 
-			var faked = eval( '(function(){return function ' + FixName( original.name ) + '( ' + args.join( ', ' ) + ' ){return hooked.apply(this,arguments);};})()' ), 
+			var faked = eval( '(function(hooked){return function ' + FixName( original.name ) + '( ' + args.join( ', ' ) + ' ){return hooked.apply(this,arguments);};})(arguments[0])' ), 
 				originals = main.$['Function.prototype'];
 			for( var name in faked_to_string_keys ) {
 				Object.defineProperty( 
