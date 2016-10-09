@@ -1,4 +1,19 @@
 'use strict';
+
+var Config = ( function () {
+	var self = {}, 
+		file = 'for-web';
+
+	self.src = 'src/';
+	self.dist = 'dist/';
+
+	self.compiled = 'compiled.js';
+
+	self.filePath = self.src + file + '.js';
+	self.minFilePath = self.dist + file + '.min.js';
+	self.compiledFilePath = self.dist + self.compiled;
+	return self;
+} ) ();
  
 var gulp = require( 'gulp' ), 
 	gzip = require( 'gulp-gzip' ), 
@@ -11,22 +26,6 @@ var gulp = require( 'gulp' ),
 
 	pkg = require('./package.json'),
 	fs = require('fs'),
-
-	src_folder = 'src/', 
-	dist_folder = 'dist/', 
-
-	file = 'for-web', 
-	compiled_file = 'compiled', 
-
-	filename = file + '.js', 
-	filepath = src_folder + filename, 
-	min_filename = file + '.min.js', 
-	min_filepath = dist_folder + min_filename, 
-
-	compiled_filename = compiled_file + '.js', 
-	compiled_filepath = dist_folder + compiled_filename, 
-	min_compiled_filename = compiled_file + '.min.js', 
-	min_compiled_filepath = dist_folder + min_compiled_filename, 
 
 	uglify_settings = {
 		fromString: true, 
@@ -56,21 +55,22 @@ var gulp = require( 'gulp' ),
 		}
 	};
 
-gulp.task( 'minify', function () {
-	gulp.src( [filepath, compiled_filepath] )
+gulp.task( 'minify', function ( done ) {
+	gulp.src( [Config.filePath, Config.compiledFilePath] )
 		.pipe( uglify( uglify_settings ) )
 		.pipe( rename( { extname: '.min.js' } ) )
-		.pipe( gulp.dest( dist_folder ) );
+		.pipe( gulp.dest( Config.dist ) )
+		.on( 'end', done );
 } );
-gulp.task( 'gzipify', function () {
-	gulp.src( [min_filepath, min_compiled_filepath] )
+gulp.task( 'gzipify', ['minify'], function () {
+	gulp.src( Config.dist + '*.min.js' )
 		.pipe( gzip() )
-		.pipe( gulp.dest( dist_folder ) );
+		.pipe( gulp.dest( Config.dist ) );
 } );
-gulp.task( 'addheader', function () {
-	var file = fs.readFileSync( min_filepath ).toString();
+gulp.task( 'addheader', ['minify'], function () {
+	var file = fs.readFileSync( Config.minFilePath ).toString();
 	file = file.replace(/^\/\*(.|\n)+\*\//, '');
-	fs.writeFileSync( min_filepath, file );
+	fs.writeFileSync( Config.minFilePath, file );
 
 	var year = moment().format('YYYY'), 
 		header_options = {
@@ -86,7 +86,7 @@ gulp.task( 'addheader', function () {
 	if( !this_year )
 		header_options.year = year;
 
-	gulp.src( min_filepath )
+	gulp.src( Config.minFilePath )
 		.pipe( 
 			header( [
 				'/*! ${title} - v${version} - ${date}\n',
@@ -95,15 +95,15 @@ gulp.task( 'addheader', function () {
 			].join( '' ), 
 			header_options 
 		) )
-		.pipe( gulp.dest( dist_folder ) );
+		.pipe( gulp.dest( Config.dist ) );
 } );
 gulp.task( 'bowerize', function () {
 	gulp.src( bower( { includeSelf: true } ) )
-		.pipe( concat( 'compiled.js' ) )
-		.pipe( gulp.dest( 'dist/' ) );
+		.pipe( concat( Config.compiled ) )
+		.pipe( gulp.dest( Config.dist ) );
 } );
 
 gulp.task( 'default', [], function () {
-	gulp.watch( [ filepath ], [ 'bowerize', 'minify', 'gzipify', 'addheader' ] );
+	gulp.watch( [ Config.filePath ], [ 'bowerize', 'minify', 'gzipify', 'addheader' ] );
 	gulp.start( [ 'bowerize', 'minify', 'gzipify', 'addheader' ] );
 } );
