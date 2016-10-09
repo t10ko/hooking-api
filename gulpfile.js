@@ -55,7 +55,7 @@ var gulp = require( 'gulp' ),
 		}
 	};
 
-gulp.task( 'minify', function ( done ) {
+gulp.task( 'minify', ['bowerize'], function ( done ) {
 	gulp.src( [Config.filePath, Config.compiledFilePath] )
 		.pipe( uglify( uglify_settings ) )
 		.pipe( rename( { extname: '.min.js' } ) )
@@ -97,10 +97,11 @@ gulp.task( 'addheader', ['minify'], function () {
 		) )
 		.pipe( gulp.dest( Config.dist ) );
 } );
-gulp.task( 'bowerize', function () {
+gulp.task( 'bowerize', function ( done ) {
 	gulp.src( bower( { includeSelf: true } ) )
 		.pipe( concat( Config.compiled ) )
-		.pipe( gulp.dest( Config.dist ) );
+		.pipe( gulp.dest( Config.dist ) )
+		.on( 'end', done );
 } );
 
 gulp.task( 'default', [], function () {
