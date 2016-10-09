@@ -1,5 +1,7 @@
 *.log
-*.html
-.npmignore
-src/for-node*
+dist
+bower_components
 node_modules
+.npmignore
+*.html
+src/for-node*

@@ -1,0 +1,29 @@
+{
+  "name": "hooking-api",
+  "description": "Function hooking API for JavaScript.",
+  "main": "src/for-web.js",
+  "authors": [
+    "Tigran Atayan"
+  ],
+  "license": "GPL-3.0",
+  "keywords": [
+    "JavaScript",
+    "Hooking",
+    "Function",
+    "Overriding",
+    "Original",
+    "Functions",
+    "Container"
+  ],
+  "dependencies": {
+    "vendor-prefixes": ">=1.0.0"
+  },
+  "homepage": "https://github.com/t10ko/hooking-api",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ]
+}

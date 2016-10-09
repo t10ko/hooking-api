@@ -14,6 +14,17 @@ This API uses error prone hooking techniques after which hook functions cannot b
 It has local container for original functions which is well organized.  
 Also this API solves vendor prefixing problems.
 
+### Dependencies.
+
+This package depends on [vendor-prefixes API](http://github.com/t10ko/vendor-prefixes).
+
+You can install this using bower.
+```sh
+bower install hooking-api
+```
+
+Or load dependencies manually.
+
 #### To use with NodeJS run.
 
 ```sh
@@ -224,6 +235,102 @@ Natives.restore( 'setTimeout' );
 window.setTimeout( function () {
     console.log( 'This will be printed after 1s.' );
 }, 1000 );
+```
+
+### Natives.saveHooked( hooked, original );
+
+If you hooked a method for your own, add it to this API's container.  
+Be carefull, this will save given that functions in local container and garbage collection wont work, so you need to delete this methods manually.
+
+### Natives.removeHooked( function );
+
+This removes hooked and original pair of functions from local containers.
+
+### Natives.originalOf( function, [include_bound] );
+
+Give a function and it will return original version of it.  
+If **include_bound** is true and original version has bound to parent version, will return bound version.
+
+### Natives.hookedOf( function );
+
+Give a function and it will return hooked version of it.
+
+### Natives.hookFunction( function, [flags], generator, [...gen_args] );
+
+Hooks function directly.  
+If there is no need to fake hooked functions properties, pass *Natives.DONT_FAKE* flag, it will improve performance.  
+If you want to save hooked pair into this API's local container, pass *Natives.SAVE* flag.  
+Make sure that this will not become a garbage, or delete it when it will.
+
+Examples of usage of **saveHooked**, **removeHooked**, **originalOf**, **hookedOf**, **hookFunction** methods.
+```javascript
+function DoSomething( name, value ) {
+    console.log( 'Doing something', name + value );
+};
+
+//  Hooking DoSomething function.
+var hooked = Natives.hookFunction( DoSomething, function ( original ) {
+    return function () {
+        console.log( 'Do something else before doing something' );
+        return original.apply( this, arguments );
+    }
+} );
+
+//  Checking are this functions different.
+//  Will print 3 trues.
+console.log( hooked.toString() === DoSomething.toString() );
+console.log( hooked.length == DoSomething.length );
+console.log( hooked.name == DoSomething.name );
+
+//  Try this one with gecko.
+if( 'toSource' in Function.prototype )
+    console.log( hooked.toSource() === DoSomething.toSource() );
+
+//  Hooking DoSomething again, but this time without faking it.
+var hooked = Natives.hookFunction( DoSomething, Natives.DONT_FAKE, function () {
+    return function () {
+        console.log( 'Again, do something else before doing something' );
+        return original.apply( this, arguments );
+    }
+} );
+
+//  Checking are this functions different.
+//  This time this will print 3 falses.
+console.log( hooked.toString() === DoSomething.toString() );
+console.log( hooked.length == DoSomething.length );
+console.log( hooked.name == DoSomething.name );
+
+//  Now tryinig to hook and save function in the local container of this API.
+var hooked = Natives.hookFunction( DoSomething, Natives.DONT_FAKE | Natives.SAVE, function () {
+    return function () {
+        console.log( 'Again, do something else before doing something' );
+        return original.apply( this, arguments );
+    }
+} );
+
+//  2 trues.
+console.log( Natives.originalOf( hooked ) === DoString );
+console.log( Natives.hookedOf( DoString ) === hooked );
+
+Natives.removeHooked( DoString );
+
+//  2 falses. because we removed all info for this functions from container.
+console.log( Natives.originalOf( hooked ) === DoString );
+console.log( Natives.hookedOf( DoString ) === hooked );
+
+//  It's possible to save into container manually too.
+var hooked = Natives.hookFunction( DoSomething, function () {
+    return function () {
+        console.log( 'Again, do something else before doing something' );
+        return original.apply( this, arguments );
+    }
+} );
+Natives.saveHooked( hooked, DoSomething );
+
+//  Again 2 trues.
+console.log( Natives.originalOf( hooked ) === DoString );
+console.log( Natives.hookedOf( DoString ) === hooked );
+Natives.removeHooked( DoString );
 ```
 
 ## Helper methods.

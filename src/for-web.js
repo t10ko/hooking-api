@@ -7,7 +7,8 @@
 		( typeof exports === 'object' ? exports : scope ).Natives = factory( scope );
 	}
 } ) ( this, function () {
-	var ArrayPush = Array.prototype.push;
+	var ArrayProto = Array.prototype, 
+		ArrayPush = Array.prototype.push;
 	var HasOwn = ( function () {
 		var has_own = {}.hasOwnProperty;
 		return function HasOwn( target, name ) {
@@ -30,7 +31,21 @@
 		var length = !!obj && ('length' in obj) && obj.length;
 		return IsArray( obj ) || length === 0 || IsNumber( length ) && length > 0 && ( length - 1 ) in obj;
 	};
+	function InsertAt ( container, elements, index ) {
+		if( !IsArrayLike( elements ) ) 
+			elements = [ elements ];
+		if( index === undefined ) {
+			ArrayPush.apply( container, elements );
+		} else {
+			var args = [ index, 0 ];
+			ArrayPush.apply( args, elements );
+			ArrayProto.splice.apply( container, args );
+		}
+		return container;
+	};
+	function IsINT( n ) { return IsScalar(n) && !isNaN(n) && (n % 1) === 0; };
 	function IsBool( arg ) { return arg === true || arg === false; };
+	function IsUINT( n ) { return IsINT( n ) && n >= 0; };
 	function Slice( target, begin, end ) {
 		var i, result = [], size, len = target.length;
 		begin = ((begin = begin || 0) >= 0) ? begin : Math.max(0, len + begin);
@@ -161,12 +176,17 @@
 
 	var self = {}, 
 		main = self, 
-		publics = {}, 
+		publics = (main.$ = {}), 
 
-		hooked_methods = _(), 
+		faked_to_string_keys = { toString: RandomString(4) + 'hookedFunctionToStringValue' }, 
+
+		hooked2original = _(), 
+		original2hooked = _(), 
 
 		bound2original = _(), 
 		original2bound = _(), 
+
+		hooked_from_outside = _(), 
 
 		cached = _(), 
 
@@ -176,149 +196,9 @@
 		BIND_TO_PARENT = 8, 
 		IGNORE_FIRST_NAME_FAIL = 16;
 
-	/**
-	 * Vendor prefix handling API.
-	 * @VendorPrefixes
-	 */
-	var VendorPrefixes = ( function () {
-		var self = {}, 
-			main = self, 
-			prefix_to_index = _(), 
-			prefixes = [], 
-			matched = false;
-
-		( function () {
-			var list = [ 'Webkit', 'Moz', 'MS', 'O' ], i = 0;
-			for( ; i < list.length; i++ ) {
-				var pre = list[i], 
-					lower = pre.toLowerCase(), 
-					for_css = '-' + lower + '-', 
-					upper = pre.toUpperCase() + '_', 
-					for_event = pre == 'MS' ? pre : lower;
-
-				prefixes.push( [ lower, pre, for_css, upper, for_event ] );
-				prefix_to_index[ lower ] = i;
-			}
-		} ) ();
-		main.current = null;
-
-		/**
-		 * Vendor prefix types.
-		 */
-		main.JS = 0;
-		main.JSClass = 1;
-		main.CSS = 1;
-		main.const = 3;
-		main.event = 4;
-		main.checkType = function ( type ) { return type >= 0 && type <= 4; };
-
-		function Match( index ) {
-			var info = prefixes[ index ];
-			matched = true;
-			prefixes = [ info ];
-			main.current = info[ main.STD ];
-		};
-		function FirstToUpper( value ) { return value[0].toUpperCase() + value.slice(1); };
-		function PrefixToSTD( value ) { return value.toLowerCase().replace( /^\-|\-$/g, '' ); };
-		function CheckMatched() {
-			if( !matched )
-				throw new Error( 'Vendor prefix of this browser is not found yet.' );	
-			return matched;
-		};
-		function GetVersions( value, type, skip_main ) {
-			type = type || 0;
-
-			var is_event = type == main.EVENT, 
-				result = {}, 
-				i = prefixes.length;
-
-			if( !skip_main )
-				result['*'] = is_event ? value.toLowerCase() : value 
-
-			if( is_event || type == main.STD || type == main.JS ) 
-				value = FirstToUpper( value );
-
-			while( i-- ) {
-				var info = prefixes[i];
-				result[ info[ main.STD ] ] = info[ type ] + value;
-			}
-			return result;
-		};
-
-		/**
-		 * Get all possible verions for a string.
-		 * If vendor already choosen, 
-		 * it will not return only not prefixed and that vendor prefixed versions.
-		 * @param  {String}		value		String to prefix.
-		 * @param  {UINT}		type		Prefix type to use.
-		 * @param  {Boolean}	as_array	Return results as array, or as object which keys are prefixes and values are prefixed versions.
-		 * @return {Mixed}		
-		 */
-		main.versions = function ( value, type, as_array ) {
-			var result = GetVersions( value, type );
-			return as_array ? ObjectValues( result ) : result;
-		};
-
-		/**
-		 * Try all versions for specified item.
-		 * This loops over all verions and executes given checker function on all of the versions.
-		 * Checker must return true on success.
-		 * @param	{String}		value	
-		 * @param	{UINT}		type	
-		 * @param	{Function}	checker	
-		 * @return	{Object}				null if nothing worked, working prefix version information otherwise.
-		 */
-		main.try = function ( value, type, checker ) {
-			var versions = GetVersions( value, type ), 
-				i = -1, 
-				is_prefixed = false;
-			for( var prefix in versions ) {
-				var current = versions[ prefix ];
-
-				//	If this version is supported.
-				//	Save this as the main version, and return it.
-				if( checker( current ) ) {
-					if( !matched && is_prefixed )
-						Match( i );
-
-					//	Filling prefix to value map in result.
-					return {
-						prefix: prefix, 
-						version: current
-					};
-				}
-
-				is_prefixed = true;
-				i++;
-			}
-			return null;
-		};
-
-		/**
-		 * Make a vendor prefix version for given value.
-		 * @param	{String}	value	Value that needs to be prefixed.
-		 * @param	{UINT}		type 	Prefix type.
-		 * @return	{String} 		
-		 */
-		main.make = function ( value, type ) {
-			return CheckMatched() && ShiftObject( GetVersions( value, type, true ) ).value;
-		};
-
-		/**
-		 * Implicitly set a vendor.
-		 * @param	{String}	prefix	Prefix string.
-		 */
-		main.matched = function ( prefix ) {
-			if( matched ) 
-				return false;
-			prefix = PrefixToSTD( prefix );
-			var choosed = HasOwn( prefix_to_index, prefix );
-			if( choosed )
-				Match( prefix_to_index[ prefix ] );
-			return choosed;
-		};
-		return main;
-	} ) ();
+	//	If function's toSource is supported, use it.
+	if( _.toSource )
+		faked_to_string_keys.toSource = RandomString(4) + 'hookedFunctionToSourceValue';
 
 	var ExtendOptions = ( function ( all_options ) {
 
@@ -358,50 +238,49 @@
 
 	var Hook = ( function () {
 		function FixName( name ) { return name && name.slice( name.lastIndexOf(' ') + 1 ) || ''; };
-		function PrepareHooked( original, hooked ) {
+		function FakeIt( hooked, original ) {
 			var args = [], 
 				i = original.length;
 			while( i-- ) 
 				args.push( 'a' + i );
-			return eval( '(function(){return function ' + FixName( original.name ) + '( ' + args.join( ', ' ) + ' ){return hooked.apply(this,arguments);};})()' );
-		};
-		function OnlyFunction( value ) { return IsFunction( value ) && value; };
-		return function Hook( handler, hooker ) {
-			var original = OnlyFunction(handler), 
-				current = OnlyFunction(handler), 
-				prepare = IsArray( handler );
-			if( prepare ) {
-				original = OnlyFunction(handler[0]);
-				current = OnlyFunction(handler[1] || original);
+
+			var faked = eval( '(function(){return function ' + FixName( original.name ) + '( ' + args.join( ', ' ) + ' ){return hooked.apply(this,arguments);};})()' ), 
+				originals = main.$['Function.prototype'];
+			for( var name in faked_to_string_keys ) {
+				Object.defineProperty( 
+					faked, 
+					faked_to_string_keys[name], 
+					{ value: originals[name].call( original ) } 
+				);
 			}
+			return faked;
+		};
+		return function Hook( handler, generator, original, args ) {
+			args = args || [];
+			args.unshift( handler );
 
-			if( !original ) 
-				throw new Error( 'Give a function to hook.' );
-
-			var args = Slice( arguments, 2 );
-			args.unshift( current );
-			var hooked = hooker.apply( null, args );
-
+			//	Calling generator function.
+			var hooked = generator.apply( null, args );
 			if( !IsFunction( hooked ) )
 				throw new Error( 'hook method\'s generator argument MUST return a function.' );
 
-			if( prepare )
-				hooked = PrepareHooked( original, hooked );
+			//	If original function is not given, no need to fake it.
+			if( original ) {
 
-			//	Copying prototype and properties and methods that are defined natively.
-			hooked.prototype = original.prototype;
+				//	Faking hooked call.
+				hooked = FakeIt( hooked, original );
+
+				//	Copying properties from original function.
+				for( var prop in original ) 
+					Object.defineProperty( hooked, prop, { value: original[ prop ] } );
+
+				//	Copying prototype and properties and methods that are defined natively.
+				hooked.prototype = original.prototype;
+			}
 			return hooked;
 		};
 	} ) ();
 
-	main.originalOf = function ( method, include_binding ) {
-		var key = ObjectID( method, true ), 
-			original = key && (hooked_methods[ key ] || bound2original[ key ]) || method, 
-			or_key = ObjectID( original, true );
-		if( include_binding && or_key )
-			original = original2bound[ or_key ] || original;
-		return original;
-	};
 	function BindToParent( info ) {
 		var method = GetOriginal( info );
 		if( !method )
@@ -411,11 +290,11 @@
 			key = ObjectID( original );
 
 		if( !HasOwn( original2bound, key ) ) {
-			bound = SetOriginal( info, original2bound[ key ] = Hook( [method], function ( original ) {
+			bound = SetOriginal( info, original2bound[ key ] = Hook( method, function ( original ) {
 				return function () {
 					return original.apply( info.parents.current, arguments );
 				}
-			} ) );
+			}, method ) );
 			bound2original[ ObjectID( bound ) ] = original;
 		}
 		return true;
@@ -428,16 +307,71 @@
 	function GetOriginal( info ) { return info.parents.original[ info.name ]; };
 	function GetCurrent( info, not_orig ) { return info.parents.current[ info.name ] || (not_orig && GetOriginal( info )); };
 
-	function SaveHookedPair( new_handler, original, current ) {
-		if( current )
-			ClearInfoOf( current );
-		hooked_methods[ ObjectID( new_handler ) ] = original;
-	};
-	function ClearInfoOf( current ) {
-		var id = ObjectID( current, true );
-		id && delete hooked_methods[ id ];
+	/**
+	 * Give method to this function to get it's original version.
+	 * @param	{Function}	method			Function, which original version needed.
+	 * @param	{Boolean}	include_binding	If original variant of this function is bound to it's parent, 
+	 *                                  	give that variant.
+	 * @return	{Function}					undefined or desired original function.
+	 */
+	main.originalOf = function ( method, include_binding ) {
+		var key = ObjectID( method, true ), 
+			original = key && (hooked2original[ key ] || bound2original[ key ]) || method, 
+			or_key = ObjectID( original, true );
+		if( include_binding && or_key )
+			original = original2bound[ or_key ] || original;
+		return original;
 	};
 
+	/**
+	 * Give method to this function to get it's original version.
+	 * @param	{Function}	method			Function, which original version needed.
+	 * @param	{Boolean}	include_binding	If original variant of this function is bound to it's parent, 
+	 *                                  	give that variant.
+	 * @return	{Function}					undefined or desired original function.
+	 */
+	main.hookedOf = function ( method ) {
+		var original = main.originalOf( method ), 
+			id = ObjectID( original, true );
+		return id && original2hooked[ id ];
+	};
+
+	function SaveHookedPair( new_handler, original, from_outside ) {
+		var rewrited = main.removeHooked( original ), 
+			new_id = ObjectID( new_handler ), 
+			or_id = ObjectID( original );
+		hooked2original[ new_id ] = original;
+		original2hooked[ or_id ] = new_handler;
+		if( from_outside ) {
+			hooked_from_outside[ new_id ] = true;
+			hooked_from_outside[ or_id ] = true;
+		}
+		return rewrited;
+	};
+	function ClearHookInfo( method, from_outside ) {
+		var id = ObjectID( method, true ), 
+			found = false;
+		if( id && ( !from_outside || HasOwn( hooked_from_outside, id ) ) ) {
+			var containers = [ hooked2original, original2hooked ];
+				li = containers.length - 1, 
+				i = 0;
+			for( ; i < containers.length; i++ ) {
+				var handler = PopProp( hooked2original, id );
+				if( handler ) {
+					var opp_i = li - i, 
+						opp_container = containers[ opp_i ], 
+						key = ObjectID( handler, true );
+					if( key && !from_outside || HasOwn( hooked_from_outside, key ) ) {
+						found = true;
+						delete opp_container[ key ];
+						if( from_outside ) 
+							delete hooked_from_outside[ key ];
+					}
+				}
+			}
+		}
+		return found;
+	};
 	function Trim( text ) { return text.replace( /^[\.\s\uFEFF\xA0]+|[\.\s\uFEFF\xA0]+$/g, "" ); };
 	function MakeFullName( info ) { return info.path + '.' + info.name; };
 	function SplitPath( container ) {
@@ -522,19 +456,20 @@
 				if( exists ) {
 
 					//	Finding out if current can have instances because of FUCKING INTERNET EXPLORER.
+					var is_func = IsFunction( current ), 
+						is_object = !is_func && IsObject( current );
 					value = exists && 
-						(CanHaveInstance( current )) && 
+						CanHaveInstance( current ) && 
 
 						//	Getting original method of given function.
-						((IsFunction( current ) && main.originalOf( current, true )) || current);
+						((is_func && main.originalOf( current, true )) || current);
 
 					//	Saving current original value.
 					if( value ) 
 						container[ entry ] = value;
-					container = publics[ sum_path + '.*' ] = _();
 
 					//	Saving public version.
-					publics[ sum_path ] = value || container;
+					publics[ sum_path ] = is_func || !is_object ? value : ( container = _() );
 				}
 
 				//	Saving this path information
@@ -733,15 +668,15 @@
 
 			group = _(), 
 			result = [], 
-			vp = VendorPrefixes.checkType( VendorPrefixes[ options.prefixType ] ) || VendorPrefixes.JS, 
 
 			names = [], 
 			prefixes = [], 
 			i = 0;
 		for( ; i < args.length; i++ ) {
-			var versions = VendorPrefixes.versions( args[ i ], vp );
-			ArrayPush.apply( names, ObjectValues( versions ) );
-			ArrayPush.apply( prefixes, Object.keys( versions ) );
+			var original = args[ i ], 
+				versions = VendorPrefixes.versions( original, options.prefixType, true );
+			ArrayPush.apply( names, [original].concat( ObjectValues( versions ) ) );
+			ArrayPush.apply( prefixes, ['*'].concat( Object.keys( versions ) ) );
 		}
 
 		if( options.bindToParent ) 
@@ -759,25 +694,22 @@
 
 			//	Preparing generator arguments array
 			group = info.group || { '*': info.name };
+
 		for( var key in group ) {
 			var name = group[ key ], 
 				current = currents[ name ] || originals[ name ], 
 				original = main.originalOf( current ), 
-				target = rehook ? original : current, 
 
 				//	Hook function will make hooked function look like as original one, 
 				//	with the same arguments count and the same name.
-				new_handler = Hook.apply( null, [[original, target], generator].concat(gen_args) );
+				new_handler = Hook( rehook ? original : current, generator, original, gen_args );
 
 			//	If returned hooked version of this function/object is not a function, return immediatly.
 			if( !new_handler ) 
 				continue;
 
-			for( var prop in original ) 
-				Object.defineProperty( new_handler, prop, { value: original[ prop ] } );
-
 			//	Saving hooked method information to prevent same function changes
-			SaveHookedPair( new_handler, original, current );
+			SaveHookedPair( new_handler, original );
 
 			//	Saving new handler as a current one
 			currents[ name ] = new_handler;
@@ -809,7 +741,6 @@
 		var flags = ONLY_FUNCTIONS;
 		if( options.bindToParent ) 
 			flags |= BIND_TO_PARENT;
-
 		Load( paths, options.from, flags, HookHandler, [ rehook, generator, gen_args ] );
 		return true;
 	}
@@ -835,6 +766,51 @@
 	main.reHook = function () { return Hooker( arguments, true ); };
 
 	/**
+	 * This one hooks given function and add's hooked pair.
+	 * @param	{Function}	original	Original function which needs to be hooked.
+	 * @param	{UINT}		flags		Available flags`
+	 *                       			Natives.DONT_FAKE
+	 *                       			Natives.SAVE
+	 *                       			Pass dont fake if you dont need additional 
+	 *                           		If it's for your own use and there is no need to fake properties to original function, will increase performance.
+	 * @param	{Function}	generator	Hooker function.
+	 * @param	{...Mixed}	hooker_args Additional args to pass to generator function.
+	 * @return	{Function}				Hooked function.
+	 */
+	main.DONT_FAKE = 1;
+	main.SAVE = 2;
+	main.hookFunction = function ( original, flags, generator ) {
+		if( !IsUINT( flags ) )
+			InsertAt( arguments, 0, 1 );
+		return HookFunctionAction.apply( main, arguments );
+	};
+	function HookFunctionAction( original, flags, generator ) {
+		var fake_it = !(main.DONT_FAKE & flags), 
+			save = main.SAVE & flags, 
+			hooked = Hook( original, generator, fake_it && original, Slice( arguments, 3 ) );
+		if( save ) 
+			main.saveHooked( hooked, original );
+		return hooked;
+	};
+
+	/**
+	 * Use this function from outside to save hooked functions pair to fake toString function result :).
+	 * NOTE: This is not a weak pointer container, 
+	 * so make sure you deleted those functions from here if they become unavailable.
+	 * @param	{Function}	hooked		Hooked function.
+	 * @param	{Function}	original	Original function that has been hooked.
+	 * @return	{Boolean}				True if this original was already hooked, and now we are rewriting it.
+	 */
+	main.saveHooked = function ( hooked, original ) { return SaveHookedPair( hooked, original, true ); };
+
+	/**
+	 * Deletes hooked functions pair if it became unavailable is no need anymore
+	 * @param	{Function}	method	A function, does'nt matter hooked one or original.
+	 * @return	{Boolean}			True if function has been found and deleted.
+	 */
+	main.removeHooked = function ( method ) { return ClearHookInfo( method, true ); };
+
+	/**
 	 * Restores an original function.
 	 * @param	{String}	path	Path to a function that needs to be restored to the original one.
 	 * @return	{Boolean}			Success indicator.
@@ -847,7 +823,7 @@
 
 		//	Saving hooked method information to prevent same function changes
 		currents[ name ] = main.originalOf( current );
-		ClearInfoOf( current );
+		ClearHookInfo( current );
 	}
 	main.restore = function () {
 		var args = Slice( arguments ), 
@@ -858,11 +834,12 @@
 
 	//	Hooking toString method of Function, to prevent geting it's hooked source code. 3:)
 	//	By doing this, checking if function is hooked or not, becomes impossible.
-	main.hook( 'toString', 'toSource', { from: 'Function.prototype' }, function ( original ) {
-		return function () {
-			return original.apply( main.originalOf( this ), arguments );
-		};
+	main.need( 'toString', 'toSource', { from: 'Function.prototype', names: true } ).forEach( function ( method ) {
+		main.hook( 'Function.prototype.' + method, function ( original ) {
+			return function () {
+				return this[faked_to_string_keys[ original.name ]] || original.apply( this, arguments );
+			};
+		} );
 	} );
-	main.$ = publics;
 	return main;
 } );
