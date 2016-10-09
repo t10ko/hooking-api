@@ -2,7 +2,7 @@
   "name": "hooking-api",
   "main": "src/for-node.js",
   "description": "Function hooking API for NodeJS.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "homepage": "https://github.com/t10ko/hooking-api",
   "license": "GPL-3.0",
   "author": {
