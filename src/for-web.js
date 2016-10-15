@@ -442,7 +442,7 @@
 				//	If this entry does not exist in public native JS api, 
 				//	and ignore name fail not wanted or this is not the wanted name, 
 				//	then execution failed.
-				var exists = HasOwn( currrent, entry ), 
+				var exists = HasOwn( current, entry ), 
 					ex_current = current, 
 					is_last = last_i == i, 
 					current = current[ entry ];
