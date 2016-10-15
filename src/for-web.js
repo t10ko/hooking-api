@@ -455,16 +455,11 @@
 				var value, ex_container = container;
 				if( exists ) {
 
-					//	Finding out if current can have instances because of FUCKING INTERNET EXPLORER.
-					value = exists && 
-						CanHaveInstance( current ) && 
-
-						//	Getting original method of given function.
-						((IsFunction( current ) && main.originalOf( current, true )) || current);
-
 					//	Saving current original value.
-					if( value ) 
+					if( exists ) {
+						value = (CanHaveInstance( current ) && IsFunction( current ) && main.originalOf( current, true )) || current;
 						container[ entry ] = value;
+					}
 					container = publics[ sum_path + '.*' ] = _();
 
 					//	Saving public version.
