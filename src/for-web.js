@@ -456,13 +456,11 @@
 				if( exists ) {
 
 					//	Finding out if current can have instances because of FUCKING INTERNET EXPLORER.
-					var is_func = IsFunction( current ), 
-						is_object = !is_func && IsObject( current );
 					value = exists && 
 						CanHaveInstance( current ) && 
 
 						//	Getting original method of given function.
-						((is_func && main.originalOf( current, true )) || current);
+						((IsFunction( current ) && main.originalOf( current, true )) || current);
 
 					//	Saving current original value.
 					if( value ) 
