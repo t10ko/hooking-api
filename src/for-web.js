@@ -442,7 +442,7 @@
 				//	If this entry does not exist in public native JS api, 
 				//	and ignore name fail not wanted or this is not the wanted name, 
 				//	then execution failed.
-				var exists = entry in current, 
+				var exists = HasOwn( currrent, entry ), 
 					ex_current = current, 
 					is_last = last_i == i, 
 					current = current[ entry ];
@@ -467,9 +467,10 @@
 					//	Saving current original value.
 					if( value ) 
 						container[ entry ] = value;
+					container = publics[ sum_path + '.*' ] = _();
 
 					//	Saving public version.
-					publics[ sum_path ] = is_func || !is_object ? value : ( container = _() );
+					publics[ sum_path ] = exists ? value : container;
 				}
 
 				//	Saving this path information

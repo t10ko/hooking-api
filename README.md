@@ -396,7 +396,7 @@ Functions with paths can be accessed like this.
 console.log( Natives.$['EventTarget.prototype.addEventListener'] );
 
 //  Or like this.
-console.log( Natives.$['EventTarget.prototype'].addEventListener );
+console.log( Natives.$['EventTarget.prototype.*'].addEventListener );
 ```
 But this one will return the real(maybe hooked) version.  
 It's because EventTarget.prototype is the real prototype of EventTarget interface, so in order to get the original functions, you need to access them using methods mentioned above.  
@@ -413,7 +413,7 @@ Natives.hook( 'EventTarget.prototype.addEventListener', function ( original ) {
 } );
 
 //  This will print false.
-console.log( Natives.$.EventTarget.prototype.addEventListener === Natives.$['EventTarget.prototype'].addEventListener );
+console.log( Natives.$.EventTarget.prototype.addEventListener === Natives.$['EventTarget.prototype.*'].addEventListener );
 ```
 
 ### Natives.need( ...path, [options] );
