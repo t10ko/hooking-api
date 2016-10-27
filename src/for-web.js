@@ -123,12 +123,17 @@
 	function GetLast( list ) { return list[ list.length - 1 ]; };
 	function SetLast( list, value ) { return ( list[ list.length - 1 ] = value, list ); };
 	function RandomString( len ) { return Math.random().toString( 16 ).substr( 2, len || 8 ); };
-	function ObjectID( target, dont_make ) {
-		var key = target.objectUniqueID;
-		if( !key && !dont_make ) 
-			Object.defineProperty( target, 'objectUniqueID', { value: key = RandomString() } )
-		return key;
-	};
+	var ObjectID = ( function () {
+		var self = ObjectID;
+		function ObjectID( target, dont_make ) {
+			var key = target.objectUniqueID;
+			if( !key && !dont_make ) 
+				Object.defineProperty( target, self.$, { value: key = RandomString() } )
+			return key;
+		};
+		self.$ = 'objectUniqueID';
+		return self;
+	} ) ();
 	function PopProp( object, property ) {
 		var value = object[ property ];
 		delete object[ property ];
@@ -237,6 +242,7 @@
 	} );
 
 	var Hook = ( function () {
+		var props_to_ignore = { ObjectID.$: 0, prototype: 0 };
 		function FixName( name ) { return name && name.slice( name.lastIndexOf(' ') + 1 ) || ''; };
 		function FakeIt( hooked, original ) {
 			var args = [], 
@@ -267,15 +273,18 @@
 			//	If original function is not given, no need to fake it.
 			if( original ) {
 
-				//	Faking hooked call.
+				//	Faking hooked call and copying prototype, properties and methods that are defined natively.
 				hooked = FakeIt( hooked, original );
-
-				//	Copying properties from original function.
-				for( var prop in original ) 
-					Object.defineProperty( hooked, prop, { value: original[ prop ] } );
-
-				//	Copying prototype and properties and methods that are defined natively.
 				hooked.prototype = original.prototype;
+
+				//	Copying all own properties.
+				var list = Object.getOwnPropertyNames( original ), 
+					i = 0;
+				for( ; i < list.length; i++ ) {
+					var name = list[i];
+					if( !HasOwn( props_to_ignore, name ) && !HasOwn( hooked, name ) )
+						Object.defineProperty( hooked, prop, Object.getOwnPropertyDescriptor( original, prop ) );
+				}
 			}
 			return hooked;
 		};
