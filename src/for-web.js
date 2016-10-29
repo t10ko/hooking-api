@@ -427,7 +427,7 @@
 
 				pre_result = prefix && cached[ prefix ];
 
-			//	If prefix is given, try to get information from that container
+			//	If prefix is given, try to get information from that container.
 			if( pre_result ) {
 				current = GetCurrent( pre_result );
 				container = pre_result.container;
@@ -451,11 +451,11 @@
 				//	If this entry does not exist in public native JS api, 
 				//	and ignore name fail not wanted or this is not the wanted name, 
 				//	then execution failed.
-				var exists = HasOwn( current, entry ), 
+				var exists = entry in current, 
 					ex_current = current, 
 					is_last = last_i == i, 
 					current = current[ entry ];
-				if( !exists && ( !ignore_name_fail || !is_last ) ) 
+				if( !exists && ( !ignore_name_fail || !is_last ) )
 					return false;
 
 				//	If this value is a function, copy that function into originals container directly.
