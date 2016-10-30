@@ -242,7 +242,9 @@
 	} );
 
 	var Hook = ( function () {
-		var props_to_ignore = { ObjectID.$: 0, prototype: 0 };
+		var props_to_ignore = { prototype: 0 };
+		props_to_ignore[ ObjectID.$ ] = 0;
+
 		function FixName( name ) { return name && name.slice( name.lastIndexOf(' ') + 1 ) || ''; };
 		function FakeIt( hooked, original ) {
 			var args = [], 
@@ -268,7 +270,7 @@
 			//	Calling generator function.
 			var hooked = generator.apply( null, args );
 			if( !IsFunction( hooked ) )
-				throw new Error( 'hook method\'s generator argument MUST return a function.' );
+				throw new Error( 'Hook method\'s generator argument MUST return a function.' );
 
 			//	If original function is not given, no need to fake it.
 			if( original ) {
@@ -382,27 +384,24 @@
 		return found;
 	};
 	function Trim( text ) { return text.replace( /^[\.\s\uFEFF\xA0]+|[\.\s\uFEFF\xA0]+$/g, "" ); };
-	function MakeFullName( info ) { return info.path + '.' + info.name; };
 	function SplitPath( container ) {
-		if( !container ) container = [];
-		if( IsArray( container ) ) return container;
+		if( !container ) 
+			container = [];
+		if( IsArray( container ) ) 
+			return container;
 		var result = Trim( container ).split( '.' ), i = 0;
 		for( ; i < result.length; i++ ) {
 			var value = result[ i ] = Trim( result[ i ] );
-			if( !value || value == '$' ) return false;
+			if( !value || value == '$' ) {
+				console.error( 'Invalid path string', container, 'given' );
+				return false;
+			}
 		}
 		return result;
 	};
-	function JoinPath( path ) { return path.join( '.' ) || '*'; };
-	function PathToStr( path, prefix ) {
-		var raw = path.join( '.' ), path = raw || '*';
-		if( prefix && prefix != '*' ) path = prefix + ( raw ? '.' + path : '' );
-		return path;
-	};
 	function ParsePath( raw_path, flags, prefix ) {
-		var path = IsArray( raw_path ) ? CopyArray( raw_path ) : SplitPath( raw_path );
-		if( !path ) 
-			return false;
+		if( prefix )
+			raw_path = prefix + '.' + raw_path;
 
 		//	Default flags is 0
 		flags = flags || 0;
@@ -414,26 +413,26 @@
 			bind_to_parent = BIND_TO_PARENT & flags, 
 
 			//	Geting cached result
-			result = cached[ PathToStr( path, prefix ) ];
+			result = cached[ raw_path ];
+
 		if( !result ) {
-			var current = window, 
+			var path = SplitPath( raw_path ), 
+
+				current = window, 
 				container = publics, 
 
 				ex_sum_path, 
 				sum_path = prefix || '', 
 
 				last_i = path.length - 1, 
-				i = 0, 
+				i = 0;
 
-				pre_result = prefix && cached[ prefix ];
-
-			//	If prefix is given, try to get information from that container.
-			if( pre_result ) {
-				current = GetCurrent( pre_result );
-				container = pre_result.container;
-			}
+			//	If path was invalid, return immediately.
+			if( !path ) 
+				return false;
 			for( ; i < path.length; i++ ) {
-				var entry = path[ i ], t_cache;
+				var entry = path[ i ], 
+					t_cache;
 
 				//	Moving forward with all path
 				ex_sum_path = sum_path;
@@ -485,7 +484,8 @@
 					path: sum_path, 
 					name: entry
 				};
-				if( !exists ) break;
+				if( !exists )
+					break;
 			}
 			result = cached[ sum_path ];
 		}
@@ -500,15 +500,9 @@
 	function Load( args, source, flags, on_step, step_args ) {
 
 		//	Geting postfix and prefix information
-		var from_path, 
-			i = 0, 
+		var i = 0, 
 			ignore_first_fail = IGNORE_FIRST_NAME_FAIL & flags, 
 			succeed_count = 0;
-		if( source ) {
-			var from_path = ParsePath( source, ONLY_CHECK, null );
-			if( !from_path ) 
-				return null;
-		}
 
 		//	Removing name ignoring flags from flags.
 		if( ignore_first_fail ) 
@@ -519,6 +513,11 @@
 			step_args = step_args || [];
 			step_args.unshift( null );
 		}
+
+		//	Trimming source path string.
+		if( source )
+			source = Trim( source );
+
 		for( ; i < args.length; i++ ) {
 
 			//	Spliting this path to get names.
@@ -526,7 +525,7 @@
 			if( ignore_first_fail && !i ) 
 				t_flags |= IGNORE_NAME_FAIL;
 
-			info = ParsePath( args[ i ], t_flags, from_path );
+			info = ParsePath( Trim( args[ i ] ), t_flags, source );
 			if( !info ) 
 				continue;
 
@@ -595,7 +594,9 @@
 
 			//	Saving this group for every handler that exists.
 			//	No need to save group info for primitive types, because they will not be used by hooker.
-			group[ ObjectID( main.originalOf( current ) ) ] = name;
+			var key = ObjectID( main.originalOf( current ) );
+			if( !HasOwn( group, key ) ) 
+				group[ key ] = name;
 			info.group = group;
 		}
 	};
@@ -697,7 +698,6 @@
 
 			//	Preparing generator arguments array
 			group = info.group || { '*': info.name };
-
 		for( var key in group ) {
 			var name = group[ key ], 
 				current = currents[ name ] || originals[ name ], 
