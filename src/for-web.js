@@ -283,8 +283,8 @@
 				var list = Object.getOwnPropertyNames( original ), 
 					i = 0;
 				for( ; i < list.length; i++ ) {
-					var name = list[i];
-					if( !HasOwn( props_to_ignore, name ) && !HasOwn( hooked, name ) )
+					var prop = list[i];
+					if( !HasOwn( props_to_ignore, prop ) && !HasOwn( hooked, prop ) )
 						Object.defineProperty( hooked, prop, Object.getOwnPropertyDescriptor( original, prop ) );
 				}
 			}
