@@ -47,9 +47,9 @@ Or **'... > set'** to point to a setter function.
 You can give **options** to control original functions loading, There are this available options to pass.  
 1. *bindToParent*. This is used to [bind](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function/bind) loaded functions to its parents.  
 2. *from*. If you need to load multiple functions from the same place, use this.  
-For example if you need to load **addEventListener**, **removeEventListener**, **dispatchEvent** functions from **EventTarget.prototype**, you can pass 'EventTarget.prototype' to from arg.
-3. *ignoreHookeds*. Pass *false*, if you want to hook methods even if they'r already hooked. By default it's true.
-4. *rehook*. Works only with *ignoreHookeds* flag set to false. Pass *false*, if you need to hook already hooked methods. By default it's true, which means that **hook** call will rewrite all your pervious hooks. 
+For example if you need to load **addEventListener**, **removeEventListener**, **dispatchEvent** functions from **EventTarget.prototype**, you can pass 'EventTarget.prototype' to from arg.  
+3. *ignoreHookeds*. Pass *false*, if you want to hook methods even if they'r already hooked. By default it's true.  
+4. *rehook*. Works only with *ignoreHookeds* flag set to false. Pass *false*, if you need to hook already hooked methods. By default it's true, which means that **hook** call will rewrite all your pervious hooks.
 
 **Generator** is the hooker function, which overrides wanted functions based on original one, *it's not an optional argument*.  
 Generator arguments(**gen_args**) are additional arguments to pass to generator function.
