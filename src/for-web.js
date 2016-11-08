@@ -16,9 +16,9 @@
 		};
 	} ) ();
 	var IsArray = Array.isArray;
-	function IsObject( value ) { return value != null && ( typeof value === 'function' || typeof value === 'object' ); };
 	function IsScalar( value ) { return !IsObject( value ); };
 	function IsNumber( value ) { return !isNaN( value ) && value+0 === value; };
+	function IsObject( value ) { return value != null && ( typeof value === 'function' || typeof value === 'object' ); };
 	var IsFunction = ( function () {
 		var func_proto = Function.prototype;
 		return function IsFunction( target ) { return typeof target === 'function' && target != func_proto; };
@@ -219,7 +219,7 @@
 			type = type || '*';
 			var def_options = options[ type ], 
 				def_property = defaults[ type ];
-			if( IsScalar( settings ) && settings != null )
+			if( IsScalar( settings ) && settings != null ) 
 				settings = _( def_property, settings );
 			return Extend( _(), def_options, settings );
 		};
@@ -234,6 +234,11 @@
 			getAll: false, 
 			default: 'getAll'
 		}, 
+		hook: {
+			rehook: true, 
+			ignoreHookeds: true, 
+			default: 'rehook'
+		}, 
 		need: {
 			names: false, 
 			first: false, 
@@ -241,10 +246,22 @@
 		}
 	} );
 
-	var Hook = ( function () {
+	var CopyOwnProperties = ( function () {
 		var props_to_ignore = { prototype: 0 };
 		props_to_ignore[ ObjectID.$ ] = 0;
-
+		return function CopyOwnProperties( source, target ) {
+			//	Copying all own properties.
+			var list = Object.getOwnPropertyNames( source ), 
+				i = 0;
+			for( ; i < list.length; i++ ) {
+				var prop = list[i];
+				if( !HasOwn( props_to_ignore, prop ) && !HasOwn( target, prop ) )
+					Object.defineProperty( target, prop, Object.getOwnPropertyDescriptor( source, prop ) );
+			}
+			return target;
+		};
+	} ) ();
+	var Hook = ( function () {
 		function FixName( name ) { return name && name.slice( name.lastIndexOf(' ') + 1 ) || ''; };
 		function FakeIt( hooked, original ) {
 			var args = [], 
@@ -278,15 +295,7 @@
 				//	Faking hooked call and copying prototype, properties and methods that are defined natively.
 				hooked = FakeIt( hooked, original );
 				hooked.prototype = original.prototype;
-
-				//	Copying all own properties.
-				var list = Object.getOwnPropertyNames( original ), 
-					i = 0;
-				for( ; i < list.length; i++ ) {
-					var prop = list[i];
-					if( !HasOwn( props_to_ignore, prop ) && !HasOwn( hooked, prop ) )
-						Object.defineProperty( hooked, prop, Object.getOwnPropertyDescriptor( original, prop ) );
-				}
+				CopyOwnProperties( original, hooked );
 			}
 			return hooked;
 		};
@@ -301,45 +310,87 @@
 			key = ObjectID( original );
 
 		if( !HasOwn( original2bound, key ) ) {
-			bound = SetOriginal( info, original2bound[ key ] = Hook( method, function ( original ) {
+			SetOriginal( info, original2bound[ key ] = bound = Hook( method, function ( original ) {
 				return function () {
 					return original.apply( info.parents.current, arguments );
-				}
+				};
 			}, method ) );
 			bound2original[ ObjectID( bound ) ] = original;
 		}
 		return true;
 	};
 
+	var Accessors = ( function () {
+		var names = [ 'get', 'set' ];
+		return function Accessors( target, property ) {
+			var descriptor = Object.getOwnPropertyDescriptor( target, property ), 
+				result = _();
+			if( !descriptor )
+				return result;
+			for( var i = 0; i < names.length; i++ ) {
+				var name = names[i], 
+					accessor = descriptor[ name ];
+				if( accessor )
+					result[ name ] = accessor;
+			}
+			return result;
+		};
+	} ) ();
+	function GetAccessor( target, property, which ) {
+		var descriptor = Object.getOwnPropertyDescriptor( target, property );
+		return descriptor && descriptor[ which ];
+	};
+
 	//	Functions to get current and original parents from cache information entry.
 	//	For current parents container, we need to check if that name in current container exists, 
 	//	in other case, get it from original container, becuase maybe it's have been translated.
-	function SetOriginal( info, value ) { return info.parents.original[ info.name ] = value; };
-	function GetOriginal( info ) { return info.parents.original[ info.name ]; };
-	function GetCurrent( info, not_orig ) { return info.parents.current[ info.name ] || (not_orig && GetOriginal( info )); };
-
-	/**
-	 * Give method to this function to get it's original version.
-	 * @param	{Function}	method			Function, which original version needed.
-	 * @param	{Boolean}	include_binding	If original variant of this function is bound to it's parent, 
-	 *                                  	give that variant.
-	 * @return	{Function}					undefined or desired original function.
-	 */
-	main.originalOf = function ( method, include_binding ) {
-		var key = ObjectID( method, true ), 
-			original = key && (hooked2original[ key ] || bound2original[ key ]) || method, 
-			or_key = ObjectID( original, true );
-		if( include_binding && or_key )
-			original = original2bound[ or_key ] || original;
-		return original;
+	function SetOriginal( info, value ) {
+		var accessor = info.accessor;
+		if( accessor ) {
+			accessor.original = value;
+		} else {
+			info.parents.original[ info.name ] = value;
+		}
+	};
+	function SetCurrent( info, value, name ) {
+		var currents = info.parents.current, 
+			accessor = info.accessor;
+		name = name || info.name;
+		if( accessor ) {
+			var descriptor = Object.getOwnPropertyDescriptor( currents, name );
+			if( descriptor && (descriptor.set || descriptor.get) ) {
+				descriptor[ accessor.name ] = value;
+				try {
+					Object.defineProperty( currents, name, descriptor );
+					return true;
+				} catch( err ) {}
+			}
+			return false;
+		}
+		currents[ name ] = value;
+		return true;
 	};
 
 	/**
 	 * Give method to this function to get it's original version.
 	 * @param	{Function}	method			Function, which original version needed.
-	 * @param	{Boolean}	include_binding	If original variant of this function is bound to it's parent, 
+	 * @param	{Boolean}	inc_binds	If original variant of this function is bound to it's parent, 
 	 *                                  	give that variant.
 	 * @return	{Function}					undefined or desired original function.
+	 */
+	main.originalOf = function ( method, inc_binds ) {
+		var key = ObjectID( method, true ), 
+			original = key && (hooked2original[ key ] || bound2original[ key ]) || method, 
+			or_key = ObjectID( original, true );
+		if( inc_binds && or_key )
+			original = original2bound[ or_key ] || original;
+		return original;
+	};
+
+	/**
+	 * Give method to this function to get it's current hooked version.
+	 * @param	{Function}	method			Function, which hooked version needed.
+	 * @return	{Function}					undefined or desired hooked function.
 	 */
 	main.hookedOf = function ( method ) {
 		var original = main.originalOf( method ), 
@@ -347,6 +398,23 @@
 		return id && original2hooked[ id ];
 	};
 
+	function GetOriginal( info, name ) {
+		var accessor = info.accessor, 
+			parents = info.parents;
+		if( accessor && name && name != info.name ) {
+			var accessor_f = GetAccessor( parents.current, name, accessor );
+			return accessor_f && main.originalOf( accessor_f );
+		}
+		return (accessor && accessor.original) || parents.original[ name || info.name ];
+	};
+	function GetCurrent( info, name, not_orig ) {
+		var original, orig_name, 
+			accessor = info.accessor, 
+			currents = info.parents.current;
+		orig_name = name;
+		name = name || info.name;
+		return (accessor && GetAccessor( currents, name, accessor.name )) || currents[ name ] || (not_orig && (main.hookedOf( original = GetOriginal( info, orig_name ) ) || original));
+	};
 	function SaveHookedPair( new_handler, original, from_outside ) {
 		var rewrited = main.removeHooked( original ), 
 			new_id = ObjectID( new_handler ), 
@@ -383,28 +451,98 @@
 		}
 		return found;
 	};
-	function Trim( text ) { return text.replace( /^[\.\s\uFEFF\xA0]+|[\.\s\uFEFF\xA0]+$/g, "" ); };
-	function SplitPath( container ) {
-		if( !container ) 
-			container = [];
-		if( IsArray( container ) ) 
-			return container;
-		var result = Trim( container ).split( '.' ), i = 0;
-		for( ; i < result.length; i++ ) {
-			var value = result[ i ] = Trim( result[ i ] );
-			if( !value || value == '$' ) {
-				console.error( 'Invalid path string', container, 'given' );
+	function Trim( path ) { return path.replace( /^[\.\s\uFEFF\xA0]+|[\.\s\uFEFF\xA0]+$/g, '' ); };
+	function SplitPath( path_str, ret_empty ) {
+		if( !path_str )
+			return [];
+
+		var path = Trim( path_str ).split( '.' ), i = 0;
+		for( ; i < path.length; i++ ) {
+			var entry = Trim( path[ i ] ), 
+
+				//	Checking for needed accessor.
+				a_pos = entry.indexOf( '>' );
+
+			if( a_pos != -1 ) {
+				var accessor = Trim(entry.slice( a_pos + 1 ));
+				entry = (accessor == 'get' || accessor == 'set') && (Trim(entry.slice( 0, a_pos )) + '>' + accessor);
+			}
+
+			if( !( path[ i ] = entry ) ) {
+				console.error( 'Invalid path string', path_str, 'given' );
 				return false;
 			}
 		}
-		return result;
+		return path;
 	};
-	function ParsePath( raw_path, flags, prefix ) {
-		if( prefix )
-			raw_path = prefix + '.' + raw_path;
+	var GetFunctionName = ( function () {
+		var has = 'name' in Function;
+		return function GetFunctionName( target ) {
+			if( !target )
+				return '';
+			var is_func = IsFunction( target ),
+				can_have_instance = is_func || CanHaveInstance( target );
+			if( !can_have_instance )
+				return '';
+			if( has && is_func )
+				return target.name;
+			var result = target.toString();
+			if( is_func ) {
+				result = result.slice( 9 );
+				result = result.slice( 0, result.indexOf( '(' ) ).trim();
+			} else {
+				result = result.slice( 8, -1 );
+			}
+			return result;
+		};
+	} ) ();
+	var GetPrototypesOf = ( function() {
+		var data_key = 'objects-class-list';
+		return function GetPrototypesOf( target ) {
+			if( target[ data_key ] )
+				return target[ data_key ];
+			var list = [], proto = target, name;
+			while( 
+				(CanHaveInstance( proto ) ? proto = proto.prototype : proto) && 
+				(proto = Object.getPrototypeOf( proto )) && 
+				(name = GetFunctionName( proto.constructor )) 
+			) list[ name ] = proto;
+			Object.defineProperty( target, data_key, { value: list } );
+			return list;
+		};
+	} ) ();
+
+	//	This function is only used for cached containers, which are empty.
+	function ClearPathInfo( path ) {
+		path = Shortcuts.getReal( path );
+		delete cached[ path ];
+		delete publics[ path ];
+		delete publics[ path + '.*' ];
+	};
+	function GetCached( path, translated ) { return cached[ translated ? path : Shortcuts.getReal( path ) ]; };
+	var Shortcuts = ( function () {
+		var self = _(), 
+			list = _();
+		self.save = function ( shortcut, real_path ) {
+			var info = GetCached( real_path ), 
+				original = GetOriginal( info );
+			real_path = info.path;
+			publics[ shortcut ] = original;
+
+			//	Saving container information.
+			if( info.container )
+				publics[ shortcut + '.*' ] = info.container;
+			list[ shortcut ] = info.path;
+		};
+		self.getReal = function ( path, only_translated ) {
+			return list[ path ] || (!only_translated && path);
+		};
+		return self;
+	} ) ();
+	function ParsePath( path, flags ) {
 
 		//	Default flags is 0
-		flags = flags || 0;
+		flags = flags >>> 0;
 
 		//	Trying to get result
 		var only_check = ONLY_CHECK & flags, 
@@ -413,81 +551,195 @@
 			bind_to_parent = BIND_TO_PARENT & flags, 
 
 			//	Geting cached result
-			result = cached[ raw_path ];
+			result = GetCached( path.join('.') );
 
 		if( !result ) {
-			var path = SplitPath( raw_path ), 
-
-				current = window, 
+			var current = window, 
 				container = publics, 
 
 				ex_sum_path, 
-				sum_path = prefix || '', 
+				t_cache, 
+
+				sum_path = '', 
+				shortcuts = [], 
 
 				last_i = path.length - 1, 
 				i = 0;
 
-			//	If path was invalid, return immediately.
-			if( !path ) 
-				return false;
 			for( ; i < path.length; i++ ) {
-				var entry = path[ i ], 
-					t_cache;
+				var entry = path[i], 
 
-				//	Moving forward with all path
+					full_entry = entry, 
+					sum_path_woa = sum_path, 
+
+					is_last = last_i == i, 
+					accessor = null, 
+					shortcut, 
+
+					//	Accessor separator simbol position.
+					a_pos = entry.indexOf( '>' );
+
+				//	Parsing getter/setter information array.
+				//	If this had a getter setter attribute.
+				if( a_pos != -1 ) {
+					accessor = entry.slice( a_pos + 1 );
+					entry = entry.slice( 0, a_pos );
+				}
+
+				//	Moving forward with all path.
 				ex_sum_path = sum_path;
-				sum_path += (sum_path && '.') + entry;
-				if( t_cache = cached[ sum_path ] ) {
+
+				//	woa is 'without accessor'.
+				sum_path += (sum_path && '.') + full_entry;
+				sum_path_woa += (sum_path_woa && '.') + entry;
+
+				//	Getting shortcut path from this one.
+				shortcut = Shortcuts.getReal( sum_path, true );
+				if( t_cache = GetCached( shortcut || sum_path, true ) ) {
 					current = GetCurrent( t_cache );
 					container = t_cache.container;
+
+					//	Changing sum path to the needed one.
+					if( shortcut ) {
+						shortcuts.push( sum_path );
+						sum_path = t_cache.path;
+					}
 					continue;
 				}
 
-				//	If container is invalid, return immediatly.
-				if( !current ) 
-					return false;
+				//	Checking if given entry exists in current path item.
+				//	If it exists in it's prototype chain, check to which one it belongs, 
+				//	parse that path, and return it.
+				//	Also create a shortcut with publics API.
+				var exists = entry in current;
+				if( exists && !HasOwn( current, entry ) ) {
 
-				//	If this entry does not exist in public native JS api, 
-				//	and ignore name fail not wanted or this is not the wanted name, 
-				//	then execution failed.
-				var exists = entry in current, 
-					ex_current = current, 
-					is_last = last_i == i, 
-					current = current[ entry ];
-				if( !exists && ( !ignore_name_fail || !is_last ) )
-					return false;
+					//	If this was a class, add a new entry to a path, 
+					//	to find a prototype object.
+					//	And assign this entry to it.
+					var real_one, protos = GetPrototypesOf( current );
+					for( var name in protos ) {
+						var proto = protos[ name ];
+						if( HasOwn( proto, entry ) ) {
 
-				//	If this value is a function, copy that function into originals container directly.
-				//	Also, we dont need to convert this function to the original one, 
-				//	because if it's undefined here, then it have not been hooked. :)
-				var value, ex_container = container;
-				if( exists ) {
-
-					//	Saving current original value.
-					if( exists ) {
-						value = (CanHaveInstance( current ) && IsFunction( current ) && main.originalOf( current, true )) || current;
-						container[ entry ] = value;
+							//	This case is only possible if accessor wanted, but not existed.
+							real_one = ParsePath( [ name, 'prototype', full_entry ] );
+							if( !real_one ) 
+								return false;
+							break;
+						}
 					}
-					container = publics[ sum_path + '.*' ] = _();
+					if( !real_one ) {
+						console.error( 'GetPrototypesOf method worked wrong in this case.' );
+						return false;
+					}
 
-					//	Saving public version.
-					publics[ sum_path ] = exists ? value : container;
+					//	Creating a shortcut path.
+					container[ entry ] = publics[ sum_path ] = GetOriginal( real_one );
+
+					//	In case of shortucts, no difference of choosing 
+					//	original or current versions of wanted item.
+					//	Copying container from the real cache.
+					current = GetCurrent( real_one );
+					container = real_one.container;
+					sum_path = real_one.path;
+
+					//	Saving a new shortcut entry.
+					shortcuts.push( ex_sum_path );
+				} else {
+
+					//	If this entry does not exist in public native JS api, 
+					//	and ignore name fail not wanted or this is not the wanted name, 
+					//	then execution failed.
+					var accessors = Accessors( current, entry ), 
+						has_accessors = !IsObjectEmpty( accessors );
+
+					//	If accessor given, check if it really exists.
+					exists = exists && (!accessor || HasOwn( accessors, accessor ));
+					if( !exists && ( !ignore_name_fail || !is_last ) )
+						return false;
+
+					//	If accessor does not exist for this function, create a dummy one.
+					if( !exists && accessor )
+						accessors[ accessor ] = null;
+
+					//	If this value is a function, copy that function into originals container directly.
+					//	Also, we dont need to convert this function to the original one, 
+					//	because if it's undefined here, then it have not been hooked. :)
+					var save_to_cache = _(), 
+						ex_current = current, 
+						ex_container = container;
+					if( has_accessors ) {
+						for( var name in accessors ) {
+							var plus_name = '>' + name, 
+								full_path = sum_path_woa + plus_name, 
+								accessor_f = accessors[ name ], 
+								this_container = _();
+
+							if( accessor_f )
+								publics[ full_path ] = main.originalOf( accessor_f, true );
+							publics[ full_path + '.*' ] = this_container;
+
+							save_to_cache[ name ] = this_container;
+						}
+					} else {
+						current = current[ entry ];
+
+						//	Checking if wanted entry really exists.
+						if( exists ) 
+							publics[ sum_path ] = container[ entry ] = (IsFunction( current ) && main.originalOf( current, true )) || current;
+						publics[ sum_path + '.*' ] = save_to_cache[ '*' ] = _();
+					}
+
+					//	This will be saved in cache.
+					container = save_to_cache[ accessor || '*' ];
+
+					//	Saving this path information.
+					for( var name in save_to_cache ) {
+						var this_container = save_to_cache[ name ], 
+							full_path = sum_path_woa, plus_name, 
+							is_accessor = name != '*' && this_container, 
+							save = !is_accessor || name == accessor;
+
+						if( is_accessor ) {
+							full_path += plus_name = '>' + name;
+						} else {
+							name = null;
+						}
+
+						//	Caching this path information.
+						cached[ full_path ] = {
+							parents: {
+								original: ex_container, 
+								current: ex_current
+							}, 
+							accessor: is_accessor && {
+								name: name, 
+								original: (accessor_f = accessors[ name ]) || main.originalOf( accessor_f, true )
+							}, 
+							container: this_container, 
+							path: full_path, 
+							name: entry
+						};
+					}
+
+					var j = 0;
+					for( ; j < shortcuts.length; j++ ) 
+						Shortcuts.save( shortcuts[j] += (shortcuts[j] && '.') + full_entry, sum_path );
 				}
 
-				//	Saving this path information
-				cached[ sum_path ] = {
-					parents: {
-						original: ex_container, 
-						current: ex_current
-					}, 
-					container: container, 
-					path: sum_path, 
-					name: entry
-				};
-				if( !exists )
+				//	If value does not exist, return false.
+				if( !exists ) {
 					break;
+
+					//	If changers existed but not wanted, and this is not the last path item wanted, 
+					//	that this failed because if property has a getter setter defined, 
+					//	it's value is not static, so we need to ignore it.
+				} else if( has_accessors && !is_last && !accessor ) {
+					return false;
+				}
 			}
-			result = cached[ sum_path ];
+			result = GetCached( sum_path );
 		}
 
 		//	Binding this information to parent.
@@ -501,8 +753,7 @@
 
 		//	Geting postfix and prefix information
 		var i = 0, 
-			ignore_first_fail = IGNORE_FIRST_NAME_FAIL & flags, 
-			succeed_count = 0;
+			ignore_first_fail = IGNORE_FIRST_NAME_FAIL & flags;
 
 		//	Removing name ignoring flags from flags.
 		if( ignore_first_fail ) 
@@ -515,9 +766,7 @@
 		}
 
 		//	Trimming source path string.
-		if( source )
-			source = Trim( source );
-
+		source = SplitPath( source, true );
 		for( ; i < args.length; i++ ) {
 
 			//	Spliting this path to get names.
@@ -525,7 +774,7 @@
 			if( ignore_first_fail && !i ) 
 				t_flags |= IGNORE_NAME_FAIL;
 
-			info = ParsePath( Trim( args[ i ] ), t_flags, source );
+			info = ParsePath( source.concat( SplitPath( args[i] ) ), t_flags );
 			if( !info ) 
 				continue;
 
@@ -536,9 +785,7 @@
 				step_args[0] = info;
 				on_step.apply( null, step_args );
 			}
-			succeed_count++;
 		}
-		return succeed_count;
 	};
 	function PrepareOptions( args, type ) {
 		var options = null;
@@ -553,7 +800,7 @@
 		var i = info.index, 
 			name = info.name, 
 			is_first = !i, 
-			current = GetCurrent( info, true );	//	parents.current[ name ];
+			current = GetCurrent( info, null, true );	//	parents.current[ name ];
 
 		//	This is the first one.
 		if( is_first ) 
@@ -600,11 +847,11 @@
 			info.group = group;
 		}
 	};
-
 	function NeedStepHandler( info, result, get_first ) {
 		if( !get_first || IsObjectEmpty( result ) ) 
 			result[ info.name ] = GetOriginal( info );
 	};
+
 	/**
 	 * Get the original version of some functions.
 	 * Give the list of that function names by arguments.
@@ -687,42 +934,45 @@
 			flags |= BIND_TO_PARENT;
 
 		Load( names, options.from, flags, TranslateHandler, [ result, prefixes, group, target, options.name ] );
+
+		//	First handler will be parsed even if value is not found, 
+		//	so delete it in case of failure.
+		if( !result.length )
+			ClearPathInfo( target.path );
 		return result.length ? ( options.getAll && result.length != 1 ? result : result.shift() ) : null;
 	};
+	function HookHandler( info, rehook, ignore_if_hooked, generator, gen_args ) {
 
-	function HookHandler( info, rehook, generator, gen_args ) {
-		var name = info.name, 
-			parents = info.parents, 
-			originals = parents.original, 
-			currents = parents.current, 
-
-			//	Preparing generator arguments array
-			group = info.group || { '*': info.name };
+		//	Preparing generator arguments array
+		var group = info.group || { '*': info.name };
 		for( var key in group ) {
-			var name = group[ key ], 
-				current = currents[ name ] || originals[ name ], 
+			var name = key != '*' && group[ key ], 
+				current = GetCurrent( info, name, true ), 
 				original = main.originalOf( current ), 
 
 				//	Hook function will make hooked function look like as original one, 
 				//	with the same arguments count and the same name.
-				new_handler = Hook( rehook ? original : current, generator, original, gen_args );
+				new_handler = (original == current || !ignore_if_hooked) && Hook( rehook ? original : current, generator, original, gen_args );
 
 			//	If returned hooked version of this function/object is not a function, return immediatly.
-			if( !new_handler ) 
-				continue;
-
-			//	Saving hooked method information to prevent same function changes
-			SaveHookedPair( new_handler, original );
-
-			//	Saving new handler as a current one
-			currents[ name ] = new_handler;
+			if( new_handler && SetCurrent( info, new_handler, name ) ) 
+				SaveHookedPair( new_handler, original );
 		}
 	}
-	function Hooker( arguments, rehook ) {
+
+	/**
+	 * Hooks a function and replaces it.
+	 * If it's already hooked, it will hook the current available version.
+	 * @param	{String}	...path				Path to a function that needs to be hooked.
+	 * @param	{Function}	generator			Hooked function generator.
+	 * @param	{ArrayLike}	...generator_args	Generator arguments. (optional)
+	 * @return	{Boolean}						Success indicator.
+	 */
+	main.hook = function () {
 		var i = 0, 
-			paths = [], 
 			generator = null, 
 			options = null, 
+			paths = [], 
 			gen_args = [];
 		for( ; i < arguments.length; i++ ) {
 			var entry = arguments[i];
@@ -737,36 +987,17 @@
 			}
 		}
 
-		options = ExtendOptions( options );
 		if( !paths.length || !generator ) 
 			throw new Error( 'Correct usage` ...path, [options], generator, [...gen_args].' );
+		options = ExtendOptions( options, 'hook' );
 
-		var flags = ONLY_FUNCTIONS;
+		var flags = ONLY_FUNCTIONS, 
+			ignore_hookeds = options.ignoreHookeds;
 		if( options.bindToParent ) 
 			flags |= BIND_TO_PARENT;
-		Load( paths, options.from, flags, HookHandler, [ rehook, generator, gen_args ] );
+		Load( paths, options.from, flags, HookHandler, [ !ignore_hookeds && options.rehook, ignore_hookeds, generator, gen_args ] );
 		return true;
-	}
-
-	/**
-	 * Hooks a function and replaces it.
-	 * If it's already hooked, it will hook the current available version.
-	 * @param	{String}	...path				Path to a function that needs to be hooked.
-	 * @param	{Function}	generator			Hooked function generator.
-	 * @param	{ArrayLike}	...generator_args	Generator arguments. (optional)
-	 * @return	{Boolean}						Success indicator.
-	 */
-	main.hook = function () { return Hooker( arguments, false ); };
-
-	/**
-	 * Hooks a function and replaces it. 
-	 * This will always hook the original version of desired function.
-	 * @param	{String}	...path				Path to a function that needs to be hooked.
-	 * @param	{Function}	generator			Hooked function generator.
-	 * @param	{ArrayLike}	...generator_args	Generator arguments. (optional)
-	 * @return	{Boolean}						Success indicator.
-	 */
-	main.reHook = function () { return Hooker( arguments, true ); };
+	};
 
 	/**
 	 * This one hooks given function and add's hooked pair.
@@ -819,14 +1050,17 @@
 	 * @return	{Boolean}			Success indicator.
 	 */
 	function RestoreHandler( info ) {
-		var name = info.name, 
-			parents = info.parents, 
-			currents = parents.current, 
-			current = currents[ name ];
 
-		//	Saving hooked method information to prevent same function changes
-		currents[ name ] = main.originalOf( current );
-		ClearHookInfo( current );
+		//	Getting group information of wanted resource.
+		var group = info.group || { '*': info.name };
+		for( var key in group ) {
+			var name = key != '*' && group[ key ], 
+				current = GetCurrent( info, name, true ), 
+				original = main.originalOf( current );
+
+			if( current != original && SetCurrent( info, CopyOwnProperties( current, original ), name ) ) 
+				ClearHookInfo( current );
+		}
 	}
 	main.restore = function () {
 		var args = Slice( arguments ), 

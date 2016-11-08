@@ -38,12 +38,18 @@ npm install hooking-api.
 ### Natives.hook( ...path, [options], generator, [...gen_args] );
 
 Loads and hooks given functions.  
-**Path** is the list of functions that needs to be hooked. Every item is a string path to it's function like **'Array.prototype.slice'**.  
+**Path** is the list of functions that needs to be hooked. Every item is a string path to it's function like **'Array.prototype.slice'**.
+
+Also i've added a support for getter/setter functions too!!.  
+To point to a getter of some property, you need to write **'HTMLElement.prototype.onclick > get'**.  
+Or **'... > set'** to point to a setter function.
 
 You can give **options** to control original functions loading, There are this available options to pass.  
 1. *bindToParent*. This is used to [bind](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function/bind) loaded functions to its parents.  
 2. *from*. If you need to load multiple functions from the same place, use this.  
 For example if you need to load **addEventListener**, **removeEventListener**, **dispatchEvent** functions from **EventTarget.prototype**, you can pass 'EventTarget.prototype' to from arg.
+3. *ignoreHookeds*. Pass *false*, if you want to hook methods even if they'r already hooked. By default it's true.
+4. *rehook*. Works only with *ignoreHookeds* flag set to false. Pass *false*, if you need to hook already hooked methods. By default it's true, which means that **hook** call will rewrite all your pervious hooks. 
 
 **Generator** is the hooker function, which overrides wanted functions based on original one, *it's not an optional argument*.  
 Generator arguments(**gen_args**) are additional arguments to pass to generator function.
@@ -103,6 +109,26 @@ Natives.hook( 'setTimeout', function ( original ) {
 console.log( Natives.$.setTimeout );
 ```
 
+As I mentioned above, there is a new feature, which allows to access getter/setter accessor methods.  
+Let's try to hook HTML element's **onclick** setter.
+```javascript
+Natives.hook( 'HTMLElement.prototype.onclick > set', function ( original ) {
+    return function () {
+        console.log( 'Setting an onclick handler on object', this );
+        return original.apply( this, arguments );
+    }
+} );
+
+//  After this call you will see a new line from the hooked function in your console.
+document.querySelector( '#target' ).onclick = function () {
+    console.log( 'Clicked on target!' );
+}
+
+//  You can access this function's original version from here.
+//  NOTE: you must write the path without any space character.
+console.log( Natives.$['HTMLElement.prototype.onclick>set'] );
+```
+
 **ONLY IN WEB**:
 Accually you cant use this setTimeout function directly, it will throw an error with text '*Illegal invocation*'.
 ```javascript
@@ -137,6 +163,73 @@ Natives.$.setTimeout( function () {
 ```
 Accually there is a simpler way to bind already loaded function to it's parent, see in the section **Helpier methods**.
 
+**ignoreHookeds** flag prevents doing multiple hooks on the same functions.  
+For example, if you try to hook with the method *HTMLElement.prototype.addEventListener*, and then hook the *HTMLDocument.prototype.addEventListener* you will come up with double hooked method, because in **wekbit** *HTMLDocument* and *HTMLElement* classes inherit addEventListener from *EventTarget* class and those methods are the same.  
+
+Here is demo.
+```javascript
+
+//  Using this flags to create a situation described above.
+Natives.hook( 'HTMLElement.prototype.addEventListener', 'HTMLDocument.prototype.addEventListener', {ignoreHookeds: false, rehook: false}, function ( original ) {
+    return function () {
+        console.log( 'Called addEventListener method!!!' );
+        return original.apply( this, arguments );
+    };
+} );
+
+//  This call will cause 2 same lines('Called addEventListener method!!!') in your console.
+document.querySelector( '#target' ).addEventListener( 'click', function () {
+    console.log( 'Clicked on target element!' );
+} );
+```
+
+So *ignoreHookeds* flag prevents situations like this.
+
+```javascript
+Natives.hook( 'setTimeout', {bindToParent: true}, function ( original ) {
+    return function () {
+        var result = original.apply( this, arguments );
+        console.log( 'setTimeout first hook call' );
+        return result;
+    }
+} );
+
+//  Rehooking already hooked method.
+Natives.hook( 'setTimeout', {ignoreHookeds: false, rehook: false}, function ( original ) {
+    return function () {
+        var result = original.apply( this, arguments );
+        console.log( 'setTimeout second hook call' );
+        return result;
+    }
+} );
+
+//  window.setTimeout call will print this two lines in your console.
+//  'setTimeout first hook call'
+//  'setTimeout second hook call'
+//  This is because the second hooker's original argument was the already hooked version.
+window.setTimeout( function () {
+    console.log( 'This is printed immedately after a second.' );
+    
+    //  To avoid this situation call this.
+    Natives.hook( 'setTimeout', {rehook: true, ignoreHookeds: false}, function ( original ) {
+        console.log( 'Rewriting all previous hooks.' );
+        return function () {
+            var result = original.apply( this, arguments );
+            console.log( 'setTimeout\'s first and only hooked method' );
+            return result;
+        }
+    } );
+    
+    //  We have rehooked setTimeout method.
+    //  So window.setTimeout call will print only this to your console.
+    //  setTimeout\'s only one hook call
+    //  So try this.
+    window.setTimeout( function () {
+        console.log( 'This is printed immedately after \'first and only\'.' )
+    }, 500 );
+}, 500 );
+```
+
 Hooked functions keep original's name, arguments count and toString declaration.  
 To get sure that hooked function is the same as original, try this.
 
@@ -158,64 +251,12 @@ console.log( Natives.$.setTimeout.name == window.setTimeout.name );
 The only differnce that remains is that errors that have been thrown from original functions, will have different backtraces.  
 Backtraces will have more entries because of hooks.
 
-### Natives.reHook( ...path, [options], generator, [...gen_args] );
-
-This is the alias of hook with one difference.
-
-When you call hook on a function that already has been hooked you will hook the hooked version *(ahahaha)*, not the original one.  
-I made like this, because in other case you'll lose all the changes done before.
-
-**reHook** is for hooking that function from 0.  
-You will replace all changes done before.
-
-```javascript
-Natives.hook( 'setTimeout', {bindToParent: true}, function ( original ) {
-    return function () {
-        var result = original.apply( this, arguments );
-        console.log( 'setTimeout first hook call' );
-        return result;
-    }
-} );
-Natives.hook( 'setTimeout', function ( original ) {
-    return function () {
-        var result = original.apply( this, arguments );
-        console.log( 'setTimeout second hook call' );
-        return result;
-    }
-} );
-
-//  window.setTimeout call will print this two lines in your console.
-//  'setTimeout first hook call'
-//  'setTimeout second hook call'
-//  This is because the second hooker's original argument was the already hooked version.
-window.setTimeout( function () {
-    console.log( 'This is printed after a second.' )
-}, 1000 );
-
-//  To avoid this situation call this.
-Natives.reHook( 'setTimeout', function ( original ) {
-    return function () {
-        var result = original.apply( this, arguments );
-        console.log( 'setTimeout\'s only one hook call' );
-        return result;
-    }
-} );
-
-//  We have rehooked setTimeout method.
-//  So window.setTimeout call will print only this to your console.
-//  setTimeout\'s only one hook call
-//  So try this.
-window.setTimeout( function () {
-    console.log( 'This is printed after a second.' )
-}, 1000 );
-```
-
 ### Natives.restore( ...path, [options] );
 
 Restores hooked functions to original ones.
 
 ```javascript
-Natives.reHook( 'setTimeout', function ( original ) {
+Natives.hook( 'setTimeout', function ( original ) {
     return function () {
         var result = original.apply( this, arguments );
         console.log( 'Message from hooked setTimeout` setTimeout called' );
