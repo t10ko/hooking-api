@@ -281,11 +281,11 @@ window.setTimeout( function () {
 }, 1000 );
 ```
 
-### Natives.hookFunction( function, [flags], generator, [...gen_args] );
+### Natives.hookFunction( function, [options], generator, [...gen_args] );
 
 Hooks function directly.  
-If there is no need to fake hooked functions properties, pass *Natives.DONT_FAKE* flag, it will improve performance.  
-If you want to save hooked pair into this API's local container, pass *Natives.SAVE* flag.  
+If there is no need to fake hooked functions properties, pass *dontFake* option, it will improve performance.  
+If you want to save hooked pair into this API's local container, pass *save* option.  
 Make sure that this will not become a garbage, or delete it when it will.
 
 Examples of usage of **saveHooked**, **removeHooked**, **originalOf**, **hookedOf**, **hookFunction** methods.
@@ -313,7 +313,7 @@ if( 'toSource' in Function.prototype )
     console.log( hooked.toSource() === DoSomething.toSource() );
 
 //  Hooking DoSomething again, but this time without faking it.
-var hooked = Natives.hookFunction( DoSomething, Natives.DONT_FAKE, function () {
+var hooked = Natives.hookFunction( DoSomething, {dontFake: true}, function () {
     return function () {
         console.log( 'Again, do something else before doing something' );
         return original.apply( this, arguments );
@@ -327,7 +327,7 @@ console.log( hooked.length == DoSomething.length );
 console.log( hooked.name == DoSomething.name );
 
 //  Now tryinig to hook and save function in the local container of this API.
-var hooked = Natives.hookFunction( DoSomething, Natives.DONT_FAKE | Natives.SAVE, function () {
+var hooked = Natives.hookFunction( DoSomething, {dontFake: true, save: true}, function () {
     return function () {
         console.log( 'Again, do something else before doing something' );
         return original.apply( this, arguments );
@@ -335,28 +335,8 @@ var hooked = Natives.hookFunction( DoSomething, Natives.DONT_FAKE | Natives.SAVE
 } );
 
 //  2 trues.
-console.log( Natives.originalOf( hooked ) === DoString );
-console.log( Natives.hookedOf( DoString ) === hooked );
-
-Natives.removeHooked( DoString );
-
-//  2 falses. because we removed all info for this functions from container.
-console.log( Natives.originalOf( hooked ) === DoString );
-console.log( Natives.hookedOf( DoString ) === hooked );
-
-//  It's possible to save into container manually too.
-var hooked = Natives.hookFunction( DoSomething, function () {
-    return function () {
-        console.log( 'Again, do something else before doing something' );
-        return original.apply( this, arguments );
-    }
-} );
-Natives.saveHooked( hooked, DoSomething );
-
-//  Again 2 trues.
-console.log( Natives.originalOf( hooked ) === DoString );
-console.log( Natives.hookedOf( DoString ) === hooked );
-Natives.removeHooked( DoString );
+console.log( Natives.originalOf( hooked ) === DoSomething );
+console.log( Natives.hookedOf( DoSomething ) === hooked );
 ```
 
 ### Natives.saveHooked( hooked, original );
@@ -368,6 +348,40 @@ Be carefull, this will save given functions in the local container and garbage c
 
 This removes hooked and original pair of functions from local containers.
 
+Example of usage of **saveHooked** and **removeHooked** methods
+```javascript
+function DoSomething( name, value ) {
+    console.log( 'Doing something', name + value );
+};
+
+//  Now tryinig to hook and save function in the local container of this API.
+var hooked = Natives.hookFunction( DoSomething, {dontFake: true, save: true}, function () {
+    return function () {
+        console.log( 'Again, do something else before doing something' );
+        return original.apply( this, arguments );
+    }
+} );
+
+Natives.removeHooked( DoSomething );
+
+//  2 falses. because we removed all info for this functions from container.
+console.log( Natives.originalOf( hooked ) === DoSomething );
+console.log( Natives.hookedOf( DoSomething ) === hooked );
+
+//  It's possible to save into container manually too.
+var hooked = Natives.hookFunction( DoSomething, function () {
+    return function () {
+        console.log( 'Again, do something else before doing something' );
+        return original.apply( this, arguments );
+    }
+} );
+Natives.saveHooked( hooked, DoSomething );
+
+//  Again 2 trues.
+console.log( Natives.originalOf( hooked ) === DoSomething );
+console.log( Natives.hookedOf( DoSomething ) === hooked );
+Natives.removeHooked( DoSomething );
+```
 ### Natives.originalOf( function, [include_bound] );
 
 Give a function and it will return original version of it.  
@@ -426,7 +440,7 @@ Natives.$.setTimeout( function () {
     console.log( 'Timeout called!!!' );
 }, 1000 );
 ```
-Fast loading for the functions from the same source.
+Fast loading functions from the same source.
 ```javascript
 //  You can load functions from the same source, so instead of writing this.
 Natives.load( 'EventTarget.prototype.addEventListener', 'EventTarget.prototype.removeEventListener', 'EventTarget.prototype.dispatchEvent' );
@@ -442,9 +456,7 @@ console.log( Natives.$['EventTarget.prototype.addEventListener'] );
 //  Or like this.
 console.log( Natives.$['EventTarget.prototype.*'].addEventListener );
 ```
-Easy, right?
-
-But this one will return the current(maybe hooked) version.  
+But this one will return the real(maybe hooked) version.  
 It's because EventTarget.prototype is the real prototype of EventTarget interface, so in order to get the original functions, you need to access them using methods mentioned above.  
 It's a little complicated, but you will understand it after doing few trys.
 ```javascript
@@ -507,7 +519,7 @@ Returns first available version found.
 **NOTE**:
 Translation functionality is not available in NodeJS, because there are no vendor prefixes there.
 
-Try this using webkit.
+Try this with webkit.
 ```javascript
 Natives.translate( 'requestAnimationFrame', { bindToParent: true } );
 ```
@@ -517,7 +529,7 @@ In webkit there are 3 available functions for cancelling requested animation fra
 2. **webkitCancelAnimationFrame**  
 3. **webkitCancelRequestAnimationFrame**  
 As we can see third version is not a vendor prefixed version of cancelAnimationFrame.
-It's a prefixed version of cancelRequestAnimationFrame, which does the same thing as cancelAnimationFrame, so this is considered as an additional version of cancelAnimationFrame.  
+It's a prefixed version of cancelRequestAnimationFrame, which does the same thing as cancelAnimationFrame, so this is considered as an additional version of those functions.  
 You can pass this additional variants too.
 
 Try to delete cancelAnimationFrame default function, to see what happenes in case of default version is not available.  
@@ -543,7 +555,7 @@ This will try the following versions
 Natives.translate( 'KEYFRAMES_RULE', { from: 'CSSRule', prefixType: 'const' } );
 ```
 
-Translating constants are not usefull for hooking, it's an additional feature that makes vendor prefixed versions easier to organize.
+Translating constants are not usefull for hooking, but it's an additional feature that makes vendor prefixed versions easier to organize.
 
 If there is vendor prefix versions available for the same function, first translate it to parse all known translations, than hook it.  
 It will override all variants of available functions.

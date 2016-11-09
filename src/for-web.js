@@ -384,6 +384,8 @@
 	 * @return	{Function}					undefined or desired original function.
 	 */
 	main.originalOf = function ( method, inc_binds ) {
+		if( !method )
+			return null;
 		var key = ObjectID( method, true ), 
 			original = key && (hooked2original[ key ] || bound2original[ key ]) || method, 
 			or_key = ObjectID( original, true );
@@ -398,6 +400,8 @@
 	 * @return	{Function}					undefined or desired hooked function.
 	 */
 	main.hookedOf = function ( method ) {
+		if( !method )
+			return null;
 		var original = main.originalOf( method ), 
 			id = ObjectID( original, true );
 		return id && original2hooked[ id ];
@@ -418,7 +422,7 @@
 			currents = info.parents.current;
 		orig_name = name;
 		name = name || info.name;
-		return (accessor && GetAccessor( currents, name, accessor.name )) || currents[ name ] || (not_orig && (main.hookedOf( original = GetOriginal( info, orig_name ) ) || original));
+		return (accessor && GetAccessor( currents, name, accessor.name )) || currents[ name ] || (not_orig && (main.hookedOf( original = GetOriginal( info, orig_name )) || original));
 	};
 	function SaveHookedPair( new_handler, original, from_outside ) {
 		var rewrited = main.removeHooked( original ), 
@@ -435,12 +439,13 @@
 	function ClearHookInfo( method, from_outside ) {
 		var id = ObjectID( method, true ), 
 			found = false;
-		if( id && ( !from_outside || HasOwn( hooked_from_outside, id ) ) ) {
+		if( id && ( !from_outside || PopProp( hooked_from_outside, id ) ) ) {
 			var containers = [ hooked2original, original2hooked ];
 				li = containers.length - 1, 
 				i = 0;
 			for( ; i < containers.length; i++ ) {
-				var handler = PopProp( hooked2original, id );
+				var container = containers[i], 
+					handler = PopProp( container, id );
 				if( handler ) {
 					var opp_i = li - i, 
 						opp_container = containers[ opp_i ], 
@@ -448,8 +453,7 @@
 					if( key && !from_outside || HasOwn( hooked_from_outside, key ) ) {
 						found = true;
 						delete opp_container[ key ];
-						if( from_outside ) 
-							delete hooked_from_outside[ key ];
+						delete hooked_from_outside[ key ];
 					}
 				}
 			}
@@ -944,7 +948,7 @@
 		//	so delete it in case of failure.
 		if( !result.length )
 			ClearPathInfo( target.path );
-		return result.length ? ( options.getAll && result.length != 1 ? result : result.shift() ) : null;
+		return result.length ? ( options.getAll ? result : result.shift() ) : null;
 	};
 	function HookHandler( info, rehook, ignore_if_hooked, generator, gen_args ) {
 
@@ -963,7 +967,7 @@
 			if( new_handler && SetCurrent( info, new_handler, name ) ) 
 				SaveHookedPair( new_handler, original );
 		}
-	}
+	};
 
 	/**
 	 * Hooks a function and replaces it.
@@ -1062,7 +1066,7 @@
 			if( current != original && SetCurrent( info, CopyOwnProperties( current, original ), name ) ) 
 				ClearHookInfo( current );
 		}
-	}
+	};
 	main.restore = function () {
 		var args = Slice( arguments ), 
 			options = PrepareOptions( args );
