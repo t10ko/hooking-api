@@ -1,16 +1,16 @@
-# JavaScript API for easy Hooking and managing native APIs.
+# JavaScript API for easy hooking and managing native APIs.
 
 [Hooking or function overriding](https://en.wikipedia.org/wiki/Hooking) is a well known technique in programming.  
 It's usefull for debugging your code, extending plugins and doing things that seem impossible( for example overriding events mechanisms in JS, to gain full control over events ).
 
-There are couple of problems according to Hooking, which are`  
+There are couple of problems according to hooking, which are`  
 1. Saving original functions in some container(if you'r the hooker, you need to use original functions).  
 2. Hooked functions can easily be spotted.  
 3. It's easy to break things around because hooked methods are different than originals.
 
 Here is a complete hooking API for JavaScript which solves all the problems mentioned above.
 
-This API uses error prone hooking techniques after which hook functions cannot be spotted.  
+This API uses error prone hooking techniques using which hooked functions cannot be spotted.  
 It has local container for original functions which is well organized.  
 Also this API solves vendor prefixing problems.
 
@@ -44,14 +44,15 @@ Also i've added a support for getter/setter functions too!!.
 To point to a getter of some property, you need to write **'HTMLElement.prototype.onclick > get'**.  
 Or **'... > set'** to point to a setter function.
 
-You can give **options** to control original functions loading, There are this available options to pass.  
+You can give **options** to control original functions loading and hooking.  
+Here are all available options.  
 1. *bindToParent*. This is used to [bind](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function/bind) loaded functions to its parents.  
-2. *from*. If you need to load multiple functions from the same place, use this.  
+2. *from*. If you need to load multiple functions from the same source, use this.  
 For example if you need to load **addEventListener**, **removeEventListener**, **dispatchEvent** functions from **EventTarget.prototype**, you can pass 'EventTarget.prototype' to from arg.  
-3. *ignoreHookeds*. Pass *false*, if you want to hook methods even if they'r already hooked. By default it's true.  
-4. *rehook*. Works only with *ignoreHookeds* flag set to false. Pass *false*, if you need to hook already hooked methods. By default it's true, which means that **hook** call will rewrite all your pervious hooks.
+3. *ignoreHookeds*. Pass *false*, if you want to hook methods even if they're already hooked. By default it's true.  
+4. *rehook*. Works only with *ignoreHookeds* flag set to false. Pass *false* if you need to hook already hooked methods. By default it's true, which means that **hook** call will rewrite all your pervious hooks of a partuclar function.
 
-**Generator** is the hooker function, which overrides wanted functions based on original one, *it's not an optional argument*.  
+**Generator** is the hooker function, which hooks needed functions based on the original or the current version( *it's not an optional argument* ).  
 Generator arguments(**gen_args**) are additional arguments to pass to generator function.
 
 Usage.
@@ -164,7 +165,7 @@ Natives.$.setTimeout( function () {
 Accually there is a simpler way to bind already loaded function to it's parent, see in the section **Helpier methods**.
 
 **ignoreHookeds** flag prevents doing multiple hooks on the same functions.  
-For example, if you try to hook with the method *HTMLElement.prototype.addEventListener*, and then hook the *HTMLDocument.prototype.addEventListener* you will come up with double hooked method, because in **wekbit** *HTMLDocument* and *HTMLElement* classes inherit addEventListener from *EventTarget* class and those methods are the same.  
+For example, if you try to hook the method *HTMLElement.prototype.addEventListener*, and then hook the *HTMLDocument.prototype.addEventListener* you will accually hooked that method twice, because in modern browsers *HTMLDocument* and *HTMLElement* classes inherit addEventListener from *EventTarget* class and those methods are the same.  
 
 Here is demo.
 ```javascript
@@ -184,6 +185,8 @@ document.querySelector( '#target' ).addEventListener( 'click', function () {
 ```
 
 So *ignoreHookeds* flag prevents situations like this.
+
+Let's try to hook a function multiple times and then rewrite all changes we've done.
 
 ```javascript
 Natives.hook( 'setTimeout', {bindToParent: true}, function ( original ) {
@@ -248,7 +251,7 @@ console.log( Natives.$.setTimeout.name == window.setTimeout.name );
 
 ##### This proves that it's impossible to differentiate the original function from the hooked one, so this makes safe to hook any function from anywhere.  
 
-The only differnce that remains is that errors that have been thrown from original functions, will have different backtraces.  
+The only differnce that remains is that errors that have been thrown from original functions will have different backtraces.  
 Backtraces will have more entries because of hooks.
 
 ### Natives.restore( ...path, [options] );
@@ -277,24 +280,6 @@ window.setTimeout( function () {
     console.log( 'This will be printed after 1s.' );
 }, 1000 );
 ```
-
-### Natives.saveHooked( hooked, original );
-
-If you hooked a method for your own, add it to this API's container.  
-Be carefull, this will save given that functions in local container and garbage collection wont work, so you need to delete this methods manually.
-
-### Natives.removeHooked( function );
-
-This removes hooked and original pair of functions from local containers.
-
-### Natives.originalOf( function, [include_bound] );
-
-Give a function and it will return original version of it.  
-If **include_bound** is true and original version has bound to parent version, will return bound version.
-
-### Natives.hookedOf( function );
-
-Give a function and it will return hooked version of it.
 
 ### Natives.hookFunction( function, [flags], generator, [...gen_args] );
 
@@ -374,13 +359,31 @@ console.log( Natives.hookedOf( DoString ) === hooked );
 Natives.removeHooked( DoString );
 ```
 
+### Natives.saveHooked( hooked, original );
+
+If you hooked a method for your own, add it to this API's container.  
+Be carefull, this will save given functions in the local container and garbage collection wont collect functions that have been removed, so you need to delete this methods manually.
+
+### Natives.removeHooked( function );
+
+This removes hooked and original pair of functions from local containers.
+
+### Natives.originalOf( function, [include_bound] );
+
+Give a function and it will return original version of it.  
+Will return bound version if **include_bound** is true and original version has been bound to parent.
+
+### Natives.hookedOf( function );
+
+Give a function and it will return hooked version of it.
+
 ## Helper methods.
 
 ### Natives.load( ...path, [options] );
 
 Loads functions original versions into container.  
-**Options** possible flags.
-1. *bindToParent*
+**Options** possible flags.  
+1. *bindToParent*  
 2. *from*
 
 We've discussed both of this flags above.
@@ -423,7 +426,7 @@ Natives.$.setTimeout( function () {
     console.log( 'Timeout called!!!' );
 }, 1000 );
 ```
-Fast loading for the functions that are in the same place.
+Fast loading for the functions from the same source.
 ```javascript
 //  You can load functions from the same source, so instead of writing this.
 Natives.load( 'EventTarget.prototype.addEventListener', 'EventTarget.prototype.removeEventListener', 'EventTarget.prototype.dispatchEvent' );
@@ -439,7 +442,9 @@ console.log( Natives.$['EventTarget.prototype.addEventListener'] );
 //  Or like this.
 console.log( Natives.$['EventTarget.prototype.*'].addEventListener );
 ```
-But this one will return the real(maybe hooked) version.  
+Easy, right?
+
+But this one will return the current(maybe hooked) version.  
 It's because EventTarget.prototype is the real prototype of EventTarget interface, so in order to get the original functions, you need to access them using methods mentioned above.  
 It's a little complicated, but you will understand it after doing few trys.
 ```javascript
@@ -491,10 +496,10 @@ Translates vendor prefixed versions of functions to original, keeps all into con
 **Path** is the function's path that needs to be translated.  
 **Additional variants**. There are cases where function haves additional variants as "vendor prefixed versions", which have different name.
 
-Available options to pass with **options** argument.
-1. *getAll*. Pass this flag and translate will return all verions of functions that are available on this system.
-2. *prefixType*( *'JS'*, *'JSClass'*, *'const'* ). Give prefixing style with this option.
-3. *bindToParent*. Same as for loader.
+Available options to pass with **options** argument.  
+1. *getAll*. Pass this flag and translate will return all verions of functions that are available on this system.  
+2. *prefixType*( *'JS'*, *'JSClass'*, *'const'* ). Give prefixing style with this option.  
+3. *bindToParent*. Same as for loader.  
 4. *from*. Same as for loader.
 
 Returns first available version found.
@@ -502,7 +507,7 @@ Returns first available version found.
 **NOTE**:
 Translation functionality is not available in NodeJS, because there are no vendor prefixes there.
 
-Try this with webkit.
+Try this using webkit.
 ```javascript
 Natives.translate( 'requestAnimationFrame', { bindToParent: true } );
 ```
@@ -512,7 +517,7 @@ In webkit there are 3 available functions for cancelling requested animation fra
 2. **webkitCancelAnimationFrame**  
 3. **webkitCancelRequestAnimationFrame**  
 As we can see third version is not a vendor prefixed version of cancelAnimationFrame.
-It's a prefixed version of cancelRequestAnimationFrame, which does the same thing as cancelAnimationFrame, so this is considered as an additional version of those functions.  
+It's a prefixed version of cancelRequestAnimationFrame, which does the same thing as cancelAnimationFrame, so this is considered as an additional version of cancelAnimationFrame.  
 You can pass this additional variants too.
 
 Try to delete cancelAnimationFrame default function, to see what happenes in case of default version is not available.  

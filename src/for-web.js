@@ -205,12 +205,12 @@
 	if( _.toSource )
 		faked_to_string_keys.toSource = RandomString(4) + 'hookedFunctionToSourceValue';
 
-	var ExtendOptions = ( function ( all_options ) {
+	var ExtendOptions = ( function ( all_options, options ) {
 
 		//	Preparing all options objects.
 		var overall = PopProp( all_options, 'overall' ), 
-			options = { '*': overall }, 
 			defaults = { '*': PopProp( overall, 'default' ) };
+		options[ '*' ] = overall;
 		for( var name in all_options ) {
 			options[ name ] = Extend( _(), overall, all_options[ name ] );
 			defaults[ name ] = PopProp( options[ name ], 'default' );
@@ -220,7 +220,7 @@
 			var def_options = options[ type ], 
 				def_property = defaults[ type ];
 			if( IsScalar( settings ) && settings != null ) 
-				settings = _( def_property, settings );
+				settings = def_property && _( def_property, settings ) || undefined;
 			return Extend( _(), def_options, settings );
 		};
 	} ) ( {
@@ -243,6 +243,11 @@
 			names: false, 
 			first: false, 
 			default: 'names'
+		}
+	}, {
+		hookFunction: {
+			dontFake: false,
+			save: false
 		}
 	} );
 
@@ -635,7 +640,7 @@
 					}
 
 					//	Creating a shortcut path.
-					container[ entry ] = publics[ sum_path ] = GetOriginal( real_one );
+					container[ full_entry ] = publics[ sum_path ] = GetOriginal( real_one );
 
 					//	In case of shortucts, no difference of choosing 
 					//	original or current versions of wanted item.
@@ -687,7 +692,7 @@
 
 						//	Checking if wanted entry really exists.
 						if( exists ) 
-							publics[ sum_path ] = container[ entry ] = (IsFunction( current ) && main.originalOf( current, true )) || current;
+							publics[ sum_path ] = container[ full_entry ] = (IsFunction( current ) && main.originalOf( current, true )) || current;
 						publics[ sum_path + '.*' ] = save_to_cache[ '*' ] = _();
 					}
 
@@ -1011,18 +1016,14 @@
 	 * @param	{...Mixed}	hooker_args Additional args to pass to generator function.
 	 * @return	{Function}				Hooked function.
 	 */
-	main.DONT_FAKE = 1;
-	main.SAVE = 2;
-	main.hookFunction = function ( original, flags, generator ) {
-		if( !IsUINT( flags ) )
-			InsertAt( arguments, 0, 1 );
-		return HookFunctionAction.apply( main, arguments );
-	};
-	function HookFunctionAction( original, flags, generator ) {
-		var fake_it = !(main.DONT_FAKE & flags), 
-			save = main.SAVE & flags, 
-			hooked = Hook( original, generator, fake_it && original, Slice( arguments, 3 ) );
-		if( save ) 
+	main.hookFunction = function ( original, options, generator ) {
+		if( IsFunction( options ) ) {
+			generator = options;
+			options = {};
+		}
+		options = ExtendOptions( options, 'hookFunction' );
+		var hooked = Hook( original, generator, !options.dontFake && original, Slice( arguments, 3 ) );
+		if( options.save ) 
 			main.saveHooked( hooked, original );
 		return hooked;
 	};
