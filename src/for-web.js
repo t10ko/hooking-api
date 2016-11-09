@@ -290,18 +290,18 @@
 			args.unshift( handler );
 
 			//	Calling generator function.
-			var hooked = generator.apply( null, args );
+			var hooked = generator.apply( null, args ), 
+				source = original || handler;
 			if( !IsFunction( hooked ) )
 				throw new Error( 'Hook method\'s generator argument MUST return a function.' );
 
-			//	If original function is not given, no need to fake it.
-			if( original ) {
-
-				//	Faking hooked call and copying prototype, properties and methods that are defined natively.
+			//	Faking hooked call and copying prototype, properties and methods that are defined natively.
+			if( original ) 
 				hooked = FakeIt( hooked, original );
-				hooked.prototype = original.prototype;
-				CopyOwnProperties( original, hooked );
-			}
+
+			//	If original function is not given, no need to fake it.
+			hooked.prototype = source.prototype;
+			CopyOwnProperties( source, hooked );
 			return hooked;
 		};
 	} ) ();
@@ -315,11 +315,13 @@
 			key = ObjectID( original );
 
 		if( !HasOwn( original2bound, key ) ) {
-			SetOriginal( info, original2bound[ key ] = bound = Hook( method, function ( original ) {
+			var parent = (info.instance && info.instance.object) || info.parents.current;
+			original2bound[ key ] = bound = Hook( method, function ( original ) {
 				return function () {
-					return original.apply( info.parents.current, arguments );
+					return original.apply( parent, arguments );
 				};
-			}, method ) );
+			}, method );
+			SetOriginal( info, bound );
 			bound2original[ ObjectID( bound ) ] = original;
 		}
 		return true;
@@ -355,6 +357,8 @@
 			accessor.original = value;
 		} else {
 			info.parents.original[ info.name ] = value;
+			if( info.instance ) 
+				publics[ info.instance.path ] = value;
 		}
 	};
 	function SetCurrent( info, value, name ) {
@@ -495,10 +499,10 @@
 				return '';
 			if( has && is_func )
 				return target.name;
-			var result = target.toString();
+			var result = target.toString().trim();
 			if( is_func ) {
 				result = result.slice( 9 );
-				result = result.slice( 0, result.indexOf( '(' ) ).trim();
+				result = result.slice( 0, result.indexOf( '(' ) );
 			} else {
 				result = result.slice( 8, -1 );
 			}
@@ -578,6 +582,7 @@
 			for( ; i < path.length; i++ ) {
 				var entry = path[i], 
 
+					ex_entry = full_entry, 
 					full_entry = entry, 
 					sum_path_woa = sum_path, 
 
@@ -633,8 +638,17 @@
 
 							//	This case is only possible if accessor wanted, but not existed.
 							real_one = ParsePath( [ name, 'prototype', full_entry ] );
-							if( !real_one ) 
+							if( !real_one ) {
 								return false;
+
+								//	Copying an instance object for bindToParent functionality, 
+								//	specially for FUCKING IE11.
+							} else if( ex_entry != 'prototype' && (current instanceof Natives.$[name]) ) {
+								real_one.instance = {
+									path: sum_path, 
+									object: current
+								};
+							}
 							break;
 						}
 					}
@@ -1079,7 +1093,7 @@
 	main.need( 'toString', 'toSource', { from: 'Function.prototype', names: true } ).forEach( function ( method ) {
 		main.hook( 'Function.prototype.' + method, function ( original ) {
 			return function () {
-				return this[faked_to_string_keys[ original.name ]] || original.apply( this, arguments );
+				return this[faked_to_string_keys[ method ]] || original.apply( this, arguments );
 			};
 		} );
 	} );
