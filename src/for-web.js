@@ -149,7 +149,7 @@
 
 	//	It turns out that in internet explorer some objects that are not functions can have instances.
 	//	For example XMLHttpRequestEventTarget in IE11.
-	function CanHaveInstance( target ) {
+	function IsClass( target ) {
 		var ok = IsFunction( target ), a;
 		if( !ok && ( ok = IsObject( target ) ) ) 
 			//	Variable a is used only to bypass uglifier optimizations.
@@ -494,7 +494,7 @@
 			if( !target )
 				return '';
 			var is_func = IsFunction( target ),
-				can_have_instance = is_func || CanHaveInstance( target );
+				can_have_instance = is_func || IsClass( target );
 			if( !can_have_instance )
 				return '';
 			if( has && is_func )
@@ -514,9 +514,9 @@
 		return function GetPrototypesOf( target ) {
 			if( target[ data_key ] )
 				return target[ data_key ];
-			var list = [], proto = target, name;
+			var list = _(), proto = target, name;
 			while( 
-				(CanHaveInstance( proto ) ? proto = proto.prototype : proto) && 
+				(IsClass( proto ) ? proto = proto.prototype : proto) && 
 				(proto = Object.getPrototypeOf( proto )) && 
 				(name = GetFunctionName( proto.constructor )) 
 			) list[ name ] = proto;
