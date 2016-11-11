@@ -727,8 +727,7 @@
 					for( var name in save_to_cache ) {
 						var this_container = save_to_cache[ name ], 
 							full_path = sum_path_woa, plus_name, 
-							is_accessor = name != '*' && this_container, 
-							save = !is_accessor || name == accessor;
+							is_accessor = name != '*' && this_container;
 
 						if( is_accessor ) {
 							full_path += plus_name = '>' + name;
