@@ -511,15 +511,21 @@
 	} ) ();
 	var GetPrototypesOf = ( function() {
 		var data_key = 'objects-class-list';
-		return function GetPrototypesOf( target ) {
+		return function GetPrototypesOf( target, get_list ) {
 			if( target[ data_key ] )
 				return target[ data_key ];
-			var list = _(), proto = target, name;
+			var list = get_list ? [] : _(), proto = target, name;
 			while( 
 				(IsClass( proto ) ? proto = proto.prototype : proto) && 
 				(proto = Object.getPrototypeOf( proto )) && 
 				(name = GetFunctionName( proto.constructor )) 
-			) list[ name ] = proto;
+			) {
+				if( get_list ) {
+					list.push( proto );
+				} else {
+					list[ name ] = proto;
+				}
+			}
 			Object.defineProperty( target, data_key, { value: list } );
 			return list;
 		};
@@ -653,7 +659,7 @@
 						}
 					}
 					if( !real_one ) {
-						console.error( 'GetPrototypesOf method worked wrong in this case.' );
+						console.error( 'Couldnt find method/property.' );
 						return false;
 					}
 
@@ -900,6 +906,23 @@
 		if( options.names )
 			result = Object.keys( result );
 		return options.first || args.length == 1 ? ( options.names ? result.pop() : ShiftObject( result, true ) ) : result;
+	};
+
+	/**
+	 * Finds a prototype object which has own given method.
+	 * @param  {Object}	object	Object in which we need to find that method.
+	 * @param  {String}	method	Method name to search for.
+	 * @return {Mixed}			Gives found prototype object or null if not found.
+	 */
+	main.findProto = function ( object, method ) {
+		var protos, proto, i = 0;
+		if( method in object ) {
+			protos = GetPrototypesOf( object, true );
+			for( ; i < protos.length; i++ ) 
+				if( HasOwn( proto = protos[ i ], method ) )
+					return proto;
+		}
+		return null;
 	};
 
 	/**

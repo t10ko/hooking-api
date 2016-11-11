@@ -391,6 +391,19 @@ Will return bound version if **include_bound** is true and original version has 
 
 Give a function and it will return hooked version of it.
 
+### Natives.findProto( object, method );
+
+Finds a prototype object which has own given method.  
+
+Example`
+```javascript
+var target = document.querySelector( '#target' ), 
+    proto = Natives.findProto( target, 'onclick' );
+
+//  Will print true.
+console.log( HTMLElement.prototype == proto );
+```
+
 ## Helper methods.
 
 ### Natives.load( ...path, [options] );
