@@ -281,21 +281,23 @@ window.setTimeout( function () {
 }, 1000 );
 ```
 
-### Natives.hookFunction( function, [options], generator, [...gen_args] );
+## Hooking functions directly.
+### Natives.hook( function, [options], generator, [...gen_args] );
 
-Hooks function directly.  
-If there is no need to fake hooked functions properties, pass *dontFake* option, it will improve performance.  
+You can pass function as argument to Natives.hook, instead of paths.
+
+If there is no need to fake hooked functions properties, give *fake: false* option, it will improve performance.  
 If you want to save hooked pair into this API's local container, pass *save* option.  
 Make sure that this will not become a garbage, or delete it when it will.
 
-Examples of usage of **saveHooked**, **removeHooked**, **originalOf**, **hookedOf**, **hookFunction** methods.
+Examples of usage of **saveHooked**, **removeHooked**, **originalOf**, **hookedOf**, **hook** methods.
 ```javascript
 function DoSomething( name, value ) {
     console.log( 'Doing something', name + value );
 };
 
 //  Hooking DoSomething function.
-var hooked = Natives.hookFunction( DoSomething, function ( original ) {
+var hooked = Natives.hook( DoSomething, function ( original ) {
     return function () {
         console.log( 'Do something else before doing something' );
         return original.apply( this, arguments );
@@ -313,7 +315,7 @@ if( 'toSource' in Function.prototype )
     console.log( hooked.toSource() === DoSomething.toSource() );
 
 //  Hooking DoSomething again, but this time without faking it.
-var hooked = Natives.hookFunction( DoSomething, {dontFake: true}, function () {
+var hooked = Natives.hook( DoSomething, {fake: false}, function () {
     return function () {
         console.log( 'Again, do something else before doing something' );
         return original.apply( this, arguments );
@@ -327,7 +329,7 @@ console.log( hooked.length == DoSomething.length );
 console.log( hooked.name == DoSomething.name );
 
 //  Now tryinig to hook and save function in the local container of this API.
-var hooked = Natives.hookFunction( DoSomething, {dontFake: true, save: true}, function () {
+var hooked = Natives.hook( DoSomething, {fake: false, save: true}, function () {
     return function () {
         console.log( 'Again, do something else before doing something' );
         return original.apply( this, arguments );
@@ -355,7 +357,7 @@ function DoSomething( name, value ) {
 };
 
 //  Now tryinig to hook and save function in the local container of this API.
-var hooked = Natives.hookFunction( DoSomething, {dontFake: true, save: true}, function () {
+var hooked = Natives.hook( DoSomething, {fake: false, save: true}, function () {
     return function () {
         console.log( 'Again, do something else before doing something' );
         return original.apply( this, arguments );
@@ -369,7 +371,7 @@ console.log( Natives.originalOf( hooked ) === DoSomething );
 console.log( Natives.hookedOf( DoSomething ) === hooked );
 
 //  It's possible to save into container manually too.
-var hooked = Natives.hookFunction( DoSomething, function () {
+var hooked = Natives.hook( DoSomething, function () {
     return function () {
         console.log( 'Again, do something else before doing something' );
         return original.apply( this, arguments );

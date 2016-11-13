@@ -183,7 +183,7 @@
 		main = self, 
 		publics = (main.$ = {}), 
 
-		faked_to_string_keys = { toString: RandomString(4) + 'hookedFunctionToStringValue' }, 
+		faked_to_string_keys = { toString: RandomString(4) + '-hooked-function-faked-toString' }, 
 
 		hooked2original = _(), 
 		original2hooked = _(), 
@@ -202,8 +202,8 @@
 		IGNORE_FIRST_NAME_FAIL = 16;
 
 	//	If function's toSource is supported, use it.
-	if( _.toSource )
-		faked_to_string_keys.toSource = RandomString(4) + 'hookedFunctionToSourceValue';
+	if( 'toSource' in Function.prototype )
+		faked_to_string_keys.toSource = RandomString(4) + '-hooked-function-faked-toSource';
 
 	var ExtendOptions = ( function ( all_options, options ) {
 
@@ -245,8 +245,8 @@
 			default: 'names'
 		}
 	}, {
-		hookFunction: {
-			dontFake: false,
+		'hook-function': {
+			fake: true,
 			save: false
 		}
 	} );
@@ -1013,7 +1013,7 @@
 	 * @param	{ArrayLike}	...generator_args	Generator arguments. (optional)
 	 * @return	{Boolean}						Success indicator.
 	 */
-	main.hook = function () {
+	function HookUsingPaths() {
 		var i = 0, 
 			generator = null, 
 			options = null, 
@@ -1045,27 +1045,35 @@
 	};
 
 	/**
-	 * This one hooks given function and add's hooked pair.
+	 * This one hooks given function and saves in the container if there is a need.
 	 * @param	{Function}	original	Original function which needs to be hooked.
-	 * @param	{UINT}		flags		Available flags`
-	 *                       			Natives.DONT_FAKE
-	 *                       			Natives.SAVE
-	 *                       			Pass dont fake if you dont need additional 
-	 *                           		If it's for your own use and there is no need to fake properties to original function, will increase performance.
+	 * @param	{UINT}		options		Available options`
+	 *                         			save	false by default
+	 *                         			fake	true by default
+	 *                       			Pass fake as false if it's for your own use and there is no 
+	 *                       			need to fake properties to original function, will increase performance.
 	 * @param	{Function}	generator	Hooker function.
 	 * @param	{...Mixed}	hooker_args Additional args to pass to generator function.
 	 * @return	{Function}				Hooked function.
 	 */
-	main.hookFunction = function ( original, options, generator ) {
+	function HookFunction( original, options, generator ) {
 		if( IsFunction( options ) ) {
 			generator = options;
 			options = {};
 		}
-		options = ExtendOptions( options, 'hookFunction' );
-		var hooked = Hook( original, generator, !options.dontFake && original, Slice( arguments, 3 ) );
+		options = ExtendOptions( options, 'hook-function' );
+		var hooked = Hook( original, generator, options.fake && original, Slice( arguments, 3 ) );
 		if( options.save ) 
 			main.saveHooked( hooked, original );
 		return hooked;
+	};
+
+	/**
+	 * Hooks given functions.
+	 * This function has 2 declarations, see HookFunction and HookUsingPaths.
+	 */
+	main.hook = function ( first ) {
+		return (IsFunction( first ) ? HookFunction : HookUsingPaths).apply( main, arguments );
 	};
 
 	/**
