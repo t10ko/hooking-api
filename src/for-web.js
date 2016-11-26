@@ -255,6 +255,8 @@
 		var props_to_ignore = { prototype: 0 };
 		props_to_ignore[ ObjectID.$ ] = 0;
 		return function CopyOwnProperties( source, target ) {
+			target.prototype = source.prototype;
+
 			//	Copying all own properties.
 			var list = Object.getOwnPropertyNames( source ), 
 				i = 0;
@@ -266,45 +268,26 @@
 			return target;
 		};
 	} ) ();
-	var Hook = ( function () {
-		function FixName( name ) { return name && name.slice( name.lastIndexOf(' ') + 1 ) || ''; };
-		function FakeIt( hooked, original ) {
-			var args = [], 
-				i = original.length;
-			while( i-- ) 
-				args.push( 'a' + i );
+	function Hook( handler, generator, original, args ) {
+		args = args || [];
+		args.unshift( handler );
 
-			var faked = eval( '(function(hooked){return function ' + FixName( original.name ) + '( ' + args.join( ', ' ) + ' ){return hooked.apply(this,arguments);};})(arguments[0])' ), 
-				originals = main.$['Function.prototype.*'];
-			for( var name in faked_to_string_keys ) {
-				Object.defineProperty( 
-					faked, 
-					faked_to_string_keys[name], 
-					{ value: originals[name].call( original ) } 
-				);
-			}
-			return faked;
-		};
-		return function Hook( handler, generator, original, args ) {
-			args = args || [];
-			args.unshift( handler );
+		//	Calling generator function.
+		var hooked = generator.apply( null, args ), 
+			source = original || handler;
+		if( !IsFunction( hooked ) )
+			throw new Error( 'Hook method\'s generator argument MUST return a function.' );
 
-			//	Calling generator function.
-			var hooked = generator.apply( null, args ), 
-				source = original || handler;
-			if( !IsFunction( hooked ) )
-				throw new Error( 'Hook method\'s generator argument MUST return a function.' );
-
-			//	Faking hooked call and copying prototype, properties and methods that are defined natively.
-			if( original ) 
-				hooked = FakeIt( hooked, original );
-
-			//	If original function is not given, no need to fake it.
-			hooked.prototype = source.prototype;
+		//	Faking hooked call and copying prototype, properties and methods that are defined natively.
+		if( original ) {
+			hooked = self.fake( original, hooked );
+		} else {
 			CopyOwnProperties( source, hooked );
-			return hooked;
-		};
-	} ) ();
+		}
+
+		//	If original function is not given, no need to fake it.
+		return hooked;
+	};
 
 	function BindToParent( info ) {
 		var method = GetOriginal( info );
@@ -315,7 +298,7 @@
 			key = ObjectID( original );
 
 		if( !HasOwn( original2bound, key ) ) {
-			var parent = (info.instance && info.instance.object) || info.parents.current;
+			var parent = (info.instance && info.instance.object) || info.parents.current, bound;
 			original2bound[ key ] = bound = Hook( method, function ( original ) {
 				return function () {
 					return original.apply( parent, arguments );
@@ -942,6 +925,29 @@
 
 		Load( args, options.from, flags );
 		return true;
+	};
+
+	/**
+	 * Makes hooked function similar to original.
+	 * @param  {Function}	original	The original function which.
+	 * @param  {Function}	hooked		Function which must be faked.
+	 * @return {Function}				Returns faked function which is similiard to original one, but it's the faked one.
+	 */
+	self.fake = function ( original, hooked ) {
+		var args = '', i = original.length;
+		while( i-- ) 
+			args += 'a' + i + ',';
+
+		var name = original.name, 
+			faked = eval( '(function(hooked){return function ' + (name && name.slice( name.lastIndexOf(' ') + 1 ) || '') + '(' + args.slice(0, -1) + '){return hooked.apply(this,arguments);};})(arguments[1])' ), 
+			originals = main.$['Function.prototype.*'];
+		for( var name in faked_to_string_keys ) {
+			var key = faked_to_string_keys[name];
+			Object.defineProperty( faked, key, {value: originals[name].call( original )} );
+		}
+
+		CopyOwnProperties( original, faked );
+		return faked;
 	};
 
 	/**
